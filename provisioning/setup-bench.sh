@@ -18,7 +18,13 @@ IFS=',' read -ra CONTEST_IP_ARRAY <<< "$CONTEST_IPS"
 BENCH_DIR="$ISUCON_DIR/bench"
 if [[ -d "$BENCH_DIR" ]]; then
   cd "$BENCH_DIR"
-  sudo -u isucon -E bash -c "cd $BENCH_DIR && /usr/local/go/bin/go build -o bench_linux_amd64 ."
+  # bench directory may have a subdirectory structure - find main package
+  if [[ -f "$BENCH_DIR/main.go" ]] || ls "$BENCH_DIR"/*.go &>/dev/null; then
+    sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && go build -o bench_linux_amd64 ."
+  else
+    # Try make if available
+    sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && make" 2>/dev/null || true
+  fi
 fi
 
 # ============================================================

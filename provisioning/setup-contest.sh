@@ -32,9 +32,9 @@ mysql -e "GRANT ALL PRIVILEGES ON isupipe.* TO 'isucon'@'localhost';"
 mysql -e "GRANT ALL PRIVILEGES ON isudns.* TO 'isucon'@'localhost';"
 mysql -e "FLUSH PRIVILEGES;"
 
-# Load schema
+# Load schema (idempotent - ignore errors if tables exist)
 if [[ -f "$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql" ]]; then
-  mysql isupipe < "$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql"
+  mysql isupipe < "$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql" 2>/dev/null || true
 fi
 
 # ============================================================
@@ -124,7 +124,7 @@ done
 WEBAPP_DIR="$ISUCON_DIR/webapp/go"
 if [[ -d "$WEBAPP_DIR" ]]; then
   cd "$WEBAPP_DIR"
-  sudo -u isucon -E bash -c "cd $WEBAPP_DIR && /usr/local/go/bin/go build -o isupipe ."
+  sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $WEBAPP_DIR && go build -o isupipe ."
 fi
 
 # ============================================================
