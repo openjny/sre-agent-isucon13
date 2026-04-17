@@ -102,7 +102,10 @@ if [[ ! -f /usr/local/go/bin/go ]]; then
 fi
 
 export PATH="/usr/local/go/bin:$PATH"
+export GOPATH="/home/isucon/go"
+export GOMODCACHE="/home/isucon/go/pkg/mod"
 echo 'export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"' > /etc/profile.d/go.sh
+echo 'export GOPATH="$HOME/go"' >> /etc/profile.d/go.sh
 
 # ============================================================
 # 5. Run role-specific setup

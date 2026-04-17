@@ -5,6 +5,8 @@ set -euo pipefail
 source /etc/isucon13/config.env
 export DEBIAN_FRONTEND=noninteractive
 export PATH="/usr/local/go/bin:$PATH"
+export GOPATH="/home/isucon/go"
+export GOMODCACHE="/home/isucon/go/pkg/mod"
 
 ISUCON_DIR="/home/isucon/isucon13"
 IFS=',' read -ra CONTEST_IP_ARRAY <<< "$CONTEST_IPS"
