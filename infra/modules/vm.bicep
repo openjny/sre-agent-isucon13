@@ -132,12 +132,9 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq git
 ISUCON_REPO=/tmp/sre-agent-isucon13
-# Always pull latest code
-if [ -d "$ISUCON_REPO" ]; then
-  cd "$ISUCON_REPO" && git pull --ff-only || (rm -rf "$ISUCON_REPO" && git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO")
-else
-  git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
-fi
+# Always fresh clone
+rm -rf "$ISUCON_REPO"
+git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
 cd "$ISUCON_REPO/provisioning"
 chmod +x bootstrap.sh setup-contest.sh setup-bench.sh
 bash bootstrap.sh '''
