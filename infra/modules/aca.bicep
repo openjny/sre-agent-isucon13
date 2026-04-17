@@ -119,7 +119,7 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'ssh-mcp-server'
-          image: '${acrLoginServer}/ssh-mcp-server:latest'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'

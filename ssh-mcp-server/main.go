@@ -1,4 +1,3 @@
-package sshmcpserver
 package main
 
 import (
@@ -188,10 +187,10 @@ type mcpRequest struct {
 }
 
 type mcpResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
+	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *mcpError   `json:"error,omitempty"`
+	Result  interface{}     `json:"result,omitempty"`
+	Error   *mcpError       `json:"error,omitempty"`
 }
 
 type mcpError struct {

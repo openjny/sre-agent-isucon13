@@ -10,6 +10,9 @@ services:
   ssh-mcp-server:
     host: containerapp
     project: ./ssh-mcp-server
+    image: ssh-mcp-server
+    docker:
+      path: ./Dockerfile
 
 hooks:
   postprovision:

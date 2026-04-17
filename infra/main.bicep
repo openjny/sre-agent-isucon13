@@ -30,6 +30,7 @@ resource rgSystem 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   tags: {
     project: 'isucon13'
     component: 'system'
+    SecurityControl: 'ignore'
   }
 }
 

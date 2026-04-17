@@ -32,8 +32,11 @@ param vmIndex int
 
 var vmName = role == 'bench' ? 'vm-isucon13-bench' : 'vm-isucon13-contest${vmIndex}'
 var vmSize = role == 'bench' ? vmSizeBench : vmSizeContest
-var privateIpAddress = role == 'bench' ? benchVmIp : contestVmIps[vmIndex - 1]
 var adminUsername = 'isucon'
+
+// Private IP: passed directly as a parameter to avoid ARM index evaluation issues
+@description('Static private IP for this VM')
+param privateIpAddress string
 
 // All VM IPs for bootstrap script
 var allContestIps = join(contestVmIps, ',')
@@ -119,6 +122,19 @@ var bootstrapArgs = role == 'bench'
   ? '--role bench --contest-ips ${allContestIps} --bench-ip ${benchVmIp}'
   : '--role contest --contest-ips ${allContestIps} --bench-ip ${benchVmIp} --vm-index ${vmIndex}'
 
+// Inline the bootstrap invocation: download repo + run script with args
+var scriptContent = '''#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq && apt-get install -y -qq git
+ISUCON_REPO=/tmp/sre-agent-isucon13
+if [ ! -d "$ISUCON_REPO" ]; then
+  git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
+fi
+cd "$ISUCON_REPO/provisioning"
+chmod +x bootstrap.sh setup-contest.sh setup-bench.sh
+bash bootstrap.sh '''
+
 resource cse 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
   parent: vm
   name: 'CustomScript'
@@ -129,8 +145,7 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
     typeHandlerVersion: '2.1'
     autoUpgradeMinorVersion: true
     protectedSettings: {
-      script: loadFileAsBase64('../../provisioning/bootstrap.sh')
-      commandToExecute: 'bash /var/lib/waagent/custom-script/download/0/bootstrap.sh ${bootstrapArgs}'
+      script: base64('${scriptContent}${bootstrapArgs}')
     }
   }
 }

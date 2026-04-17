@@ -17,6 +17,7 @@ param vmSizeBench string
 var contestVmIps = ['10.0.1.4', '10.0.1.5', '10.0.1.6']
 var benchVmIp = '10.0.1.7'
 var uniqueSuffix = uniqueString(resourceGroup().id)
+var shortSuffix = substring(uniqueSuffix, 0, 8)
 
 // ============================================================
 // Network
@@ -34,7 +35,7 @@ module network 'modules/network.bicep' = {
 // ============================================================
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: 'kv-isucon13-${uniqueSuffix}'
+  name: 'kv-isucon13-${shortSuffix}'
   location: location
   tags: { project: 'isucon13' }
   properties: {
@@ -49,7 +50,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 // ============================================================
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: 'acrisucon13${uniqueSuffix}'
+  name: 'acrisucon13${shortSuffix}'
   location: location
   sku: { name: 'Basic' }
   tags: { project: 'isucon13' }
@@ -75,7 +76,7 @@ module sshKeyGen 'modules/ssh-keygen.bicep' = {
 // ============================================================
 
 module contestVms 'modules/vm.bicep' = [
-  for i in range(1, 4): {
+  for i in range(1, 3): {
     name: 'vm-contest${i}'
     params: {
       location: location
@@ -87,6 +88,7 @@ module contestVms 'modules/vm.bicep' = [
       benchVmIp: benchVmIp
       role: 'contest'
       vmIndex: i
+      privateIpAddress: contestVmIps[i - 1]
     }
   }
 ]
@@ -107,6 +109,7 @@ module benchVm 'modules/vm.bicep' = {
     benchVmIp: benchVmIp
     role: 'bench'
     vmIndex: 1
+    privateIpAddress: benchVmIp
   }
 }
 
