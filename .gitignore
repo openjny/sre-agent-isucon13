@@ -1,0 +1,22 @@
+# azd
+.azure/
+.env
+
+# Bicep build output
+infra/main.json
+
+# Terraform (just in case)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Go binaries
+ssh-mcp-server/ssh-mcp-server
+
+# SSH keys
+*.pem
+id_ed25519*
+
+# OS
+.DS_Store
+Thumbs.db

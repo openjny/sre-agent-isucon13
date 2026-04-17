@@ -1,0 +1,17 @@
+name: sre-agent-isucon13
+metadata:
+  template: sre-agent-isucon13
+
+infra:
+  provider: bicep
+  path: infra
+
+services:
+  ssh-mcp-server:
+    host: containerapp
+    project: ./ssh-mcp-server
+
+hooks:
+  postprovision:
+    shell: sh
+    run: scripts/post-provision.sh
