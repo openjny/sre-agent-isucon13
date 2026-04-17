@@ -122,13 +122,20 @@ var bootstrapArgs = role == 'bench'
   ? '--role bench --contest-ips ${allContestIps} --bench-ip ${benchVmIp}'
   : '--role contest --contest-ips ${allContestIps} --bench-ip ${benchVmIp} --vm-index ${vmIndex}'
 
+// Force CSE re-run on each deployment by including deployment timestamp
+@description('Deployment timestamp to force CSE re-execution')
+param deployTimestamp string = utcNow()
+
 // Inline the bootstrap invocation: download repo + run script with args
 var scriptContent = '''#!/bin/bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq && apt-get install -y -qq git
 ISUCON_REPO=/tmp/sre-agent-isucon13
-if [ ! -d "$ISUCON_REPO" ]; then
+# Always pull latest code
+if [ -d "$ISUCON_REPO" ]; then
+  cd "$ISUCON_REPO" && git pull --ff-only || (rm -rf "$ISUCON_REPO" && git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO")
+else
   git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
 fi
 cd "$ISUCON_REPO/provisioning"
@@ -144,6 +151,7 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
     type: 'CustomScript'
     typeHandlerVersion: '2.1'
     autoUpgradeMinorVersion: true
+    forceUpdateTag: deployTimestamp
     protectedSettings: {
       script: base64('${scriptContent}${bootstrapArgs}')
     }
