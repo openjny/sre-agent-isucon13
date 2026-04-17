@@ -27,11 +27,19 @@ param vmSizeBench string = 'Standard_D4s_v5'
 resource rgSystem 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-isucon13-system'
   location: location
+  tags: {
+    project: 'isucon13'
+    component: 'system'
+  }
 }
 
 resource rgSreAgent 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-isucon13-sreagent'
   location: sreAgentLocation
+  tags: {
+    project: 'isucon13'
+    component: 'sreagent'
+  }
 }
 
 // ============================================================

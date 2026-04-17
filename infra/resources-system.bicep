@@ -36,6 +36,7 @@ module network 'modules/network.bicep' = {
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: 'kv-isucon13-${uniqueSuffix}'
   location: location
+  tags: { project: 'isucon13' }
   properties: {
     sku: { family: 'A', name: 'standard' }
     tenantId: tenant().tenantId
@@ -51,6 +52,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: 'acrisucon13${uniqueSuffix}'
   location: location
   sku: { name: 'Basic' }
+  tags: { project: 'isucon13' }
   properties: {
     adminUserEnabled: false
   }
@@ -73,7 +75,7 @@ module sshKeyGen 'modules/ssh-keygen.bicep' = {
 // ============================================================
 
 module contestVms 'modules/vm.bicep' = [
-  for i in range(1, 3): {
+  for i in range(1, 4): {
     name: 'vm-contest${i}'
     params: {
       location: location

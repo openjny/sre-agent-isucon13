@@ -31,6 +31,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: appInsightsName
   location: location
   kind: 'web'
+  tags: { project: 'isucon13' }
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: law.id
@@ -50,6 +51,7 @@ resource identity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' 
 // SRE Agent
 // ============================================================
 
+// SRE Agent — uses preview API (no GA version available as of 2026-04)
 #disable-next-line BCP081
 resource sreAgent 'Microsoft.App/agents@2025-05-01-preview' = {
   name: agentName

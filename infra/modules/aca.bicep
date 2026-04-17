@@ -106,7 +106,7 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
       ingress: {
         external: true
         targetPort: 8080
-        transport: 'http'
+        transport: 'auto'
       }
       registries: [
         {
