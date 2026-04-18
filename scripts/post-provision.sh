@@ -105,10 +105,22 @@ done
 echo ""
 
 # ── Step 3: Create MCP connector ─────────────────────────────────────────────
-echo "🔗 Step 3/4: MCP connector..."
-echo "   Set up manually: sre.azure.com → Builder → Connectors → Add → MCP"
-echo "   URL: https://${MCP_FQDN}/mcp"
-echo "   Header: Authorization: Bearer $(azd env get-value MCP_API_KEY 2>/dev/null || echo '<run: azd env get-value MCP_API_KEY>')"
+echo "🔗 Step 3/4: Creating MCP connector..."
+if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
+  TOKEN=$(get_token)
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/ssh-mcp" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"ssh-mcp\",\"type\":\"AgentConnector\",\"properties\":{\"dataConnectorType\":\"McpServer\",\"dataSource\":\"ssh-mcp\",\"url\":\"https://${MCP_FQDN}/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_API_KEY}\"}}}")
+  if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "202" ]; then
+    echo "   ✅ ssh-mcp → https://${MCP_FQDN}/mcp"
+  else
+    echo "   ⚠️  HTTP ${http_code}"
+  fi
+else
+  echo "   ⚠️  MCP_FQDN or MCP_API_KEY not set"
+fi
 echo ""
 
 # ── Step 4: Enable experimental tools ────────────────────────────────────────
