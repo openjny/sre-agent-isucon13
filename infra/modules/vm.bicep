@@ -26,6 +26,9 @@ param role string
 @description('VM index (1-based, used for naming)')
 param vmIndex int
 
+@description('Key Vault name for TLS certificate retrieval')
+param keyVaultName string
+
 // ============================================================
 // Variables
 // ============================================================
@@ -119,8 +122,8 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
 // ============================================================
 
 var bootstrapArgs = role == 'bench'
-  ? '--role bench --contest-ips ${allContestIps} --bench-ip ${benchVmIp}'
-  : '--role contest --contest-ips ${allContestIps} --bench-ip ${benchVmIp} --vm-index ${vmIndex}'
+  ? '--role bench --contest-ips ${allContestIps} --bench-ip ${benchVmIp} --key-vault ${keyVaultName}'
+  : '--role contest --contest-ips ${allContestIps} --bench-ip ${benchVmIp} --vm-index ${vmIndex} --key-vault ${keyVaultName}'
 
 // Force CSE re-run on each deployment by including deployment timestamp
 @description('Deployment timestamp to force CSE re-execution')

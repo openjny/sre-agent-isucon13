@@ -8,8 +8,7 @@ set -euo pipefail
 # Installs base packages, creates isucon user, clones repo, installs Go,
 # then dispatches to provision-vm-contest.sh or provision-vm-benchmark.sh.
 #
-# Usage: provision-vm.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>]
-# Usage: provision.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>]
+# Usage: provision-vm.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>] [--key-vault <name>]
 # =============================================================================
 
 LOG_FILE="/var/log/isucon13-provision.log"
@@ -22,6 +21,7 @@ ROLE=""
 CONTEST_IPS=""
 BENCH_IP=""
 VM_INDEX=""
+KEY_VAULT_NAME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --contest-ips) CONTEST_IPS="$2"; shift 2 ;;
     --bench-ip) BENCH_IP="$2"; shift 2 ;;
     --vm-index) VM_INDEX="$2"; shift 2 ;;
+    --key-vault) KEY_VAULT_NAME="$2"; shift 2 ;;
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
@@ -38,7 +39,7 @@ if [[ -z "$ROLE" || -z "$CONTEST_IPS" || -z "$BENCH_IP" ]]; then
   exit 1
 fi
 
-echo "Role: $ROLE, Contest IPs: $CONTEST_IPS, Bench IP: $BENCH_IP, VM Index: $VM_INDEX"
+echo "Role: $ROLE, Contest IPs: $CONTEST_IPS, Bench IP: $BENCH_IP, VM Index: $VM_INDEX, Key Vault: $KEY_VAULT_NAME"
 
 # Save config for later use by role-specific scripts
 mkdir -p /etc/isucon13
@@ -47,6 +48,7 @@ ROLE=$ROLE
 CONTEST_IPS=$CONTEST_IPS
 BENCH_IP=$BENCH_IP
 VM_INDEX=$VM_INDEX
+KEY_VAULT_NAME=$KEY_VAULT_NAME
 EOF
 
 # ============================================================

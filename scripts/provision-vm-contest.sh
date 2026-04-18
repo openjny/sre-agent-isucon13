@@ -12,6 +12,12 @@ ISUCON_DIR="/home/isucon/isucon13"
 IFS=',' read -ra CONTEST_IP_ARRAY <<< "$CONTEST_IPS"
 MY_IP="${CONTEST_IP_ARRAY[$((VM_INDEX - 1))]}"
 
+# Create env.sh for init_zone.sh and other scripts that source it
+cat > /home/isucon/env.sh <<ENV_SH
+export ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS=${MY_IP}
+ENV_SH
+chown isucon:isucon /home/isucon/env.sh
+
 # ============================================================
 # MySQL 8.0
 # ============================================================
@@ -45,10 +51,20 @@ if ! command -v nginx &>/dev/null; then
   apt-get install -y -qq nginx
 fi
 
-# Copy TLS certs from isucon13 repo
+# Copy TLS certs from Key Vault (self-signed, generated during infra provisioning)
 CERT_DIR="/etc/nginx/tls"
 mkdir -p "$CERT_DIR"
-if [[ -d "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls" ]]; then
+if [[ -n "${KEY_VAULT_NAME:-}" ]]; then
+  echo "Fetching TLS certificate from Key Vault: $KEY_VAULT_NAME"
+  # Get access token using VM's Managed Identity
+  TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
+  KV_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
+  # Fetch cert and key from Key Vault
+  curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.crt"
+  curl -s "${KV_URL}/secrets/tls-key?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.key"
+  chmod 600 "$CERT_DIR/_.u.isucon.dev.key"
+elif [[ -d "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls" ]]; then
+  echo "Falling back to TLS certs from isucon13 repo"
   cp "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls/"* "$CERT_DIR/"
 fi
 
@@ -101,6 +117,9 @@ gmysql-password=isucon
 local-address=0.0.0.0
 local-port=53
 PDNS_CONF
+
+# Allow isucon user to read pdns.conf (needed by pdnsutil in init_zone.sh)
+chmod 644 /etc/powerdns/pdns.conf
 
 # Initialize PowerDNS schema
 if [[ -f /usr/share/doc/pdns-backend-mysql/schema.mysql.sql ]]; then

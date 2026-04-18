@@ -9,6 +9,19 @@ export GOPATH="/home/isucon/go"
 export GOMODCACHE="/home/isucon/go/pkg/mod"
 
 ISUCON_DIR="/home/isucon/isucon13"
+
+# ============================================================
+# Trust TLS certificate from Key Vault (for benchmarker SSL)
+# ============================================================
+
+if [[ -n "${KEY_VAULT_NAME:-}" ]]; then
+  echo "Fetching TLS certificate from Key Vault for CA trust: $KEY_VAULT_NAME"
+  TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
+  KV_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
+  curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > /usr/local/share/ca-certificates/isucon.crt
+  update-ca-certificates
+fi
+
 IFS=',' read -ra CONTEST_IP_ARRAY <<< "$CONTEST_IPS"
 
 # ============================================================
@@ -20,7 +33,7 @@ if [[ -d "$BENCH_DIR" ]]; then
   cd "$BENCH_DIR"
   # bench directory may have a subdirectory structure - find main package
   if [[ -f "$BENCH_DIR/main.go" ]] || ls "$BENCH_DIR"/*.go &>/dev/null; then
-    sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && go build -o bench_linux_amd64 ."
+    sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && go build -o bin/bench_linux_amd64 ."
   else
     # Try make if available
     sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && make" 2>/dev/null || true
@@ -44,7 +57,7 @@ for ip in "${IPS[@]:1}"; do
 done
 
 cd /home/isucon/isucon13/bench
-./bench_linux_amd64 run \
+./bin/bench_linux_amd64 run \
   --target "https://pipe.u.isucon.dev" \
   --nameserver "$TARGET_IP" \
   --enable-ssl \
