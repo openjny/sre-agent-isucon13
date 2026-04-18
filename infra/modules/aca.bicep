@@ -19,6 +19,10 @@ param sshKeySecretName string = 'ssh-private-key'
 @description('Host map JSON: {"vm1":"10.0.1.4","vm2":"10.0.1.5","vm3":"10.0.1.6","bench":"10.0.1.7"}')
 param hostMapJson string
 
+@description('API key for MCP server authentication')
+@secure()
+param mcpApiKey string
+
 // ============================================================
 // Managed Identity for ACA
 // ============================================================
@@ -106,6 +110,12 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: acaEnv.id
     configuration: {
+      secrets: [
+        {
+          name: 'mcp-api-key'
+          value: mcpApiKey
+        }
+      ]
       ingress: {
         external: true
         targetPort: 8080
@@ -133,6 +143,7 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_KEY_VAULT_URL', value: keyVault.properties.vaultUri }
             { name: 'SSH_KEY_SECRET_NAME', value: sshKeySecretName }
             { name: 'AZURE_CLIENT_ID', value: acaIdentity.properties.clientId }
+            { name: 'API_KEY', secretRef: 'mcp-api-key' }
           ]
         }
       ]

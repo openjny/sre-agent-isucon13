@@ -30,6 +30,9 @@ var sshSigner ssh.Signer
 // sshSignerOnce ensures the key is loaded once.
 var sshSignerOnce sync.Once
 
+// apiKey is the required API key for authentication.
+var apiKey string
+
 func main() {
 	hostMapJSON := os.Getenv("HOST_MAP")
 	if hostMapJSON == "" {
@@ -44,10 +47,15 @@ func main() {
 		sshUser = "isucon"
 	}
 
+	apiKey = os.Getenv("API_KEY")
+	if apiKey == "" {
+		log.Println("WARNING: API_KEY not set, server is unauthenticated")
+	}
+
 	mux := http.NewServeMux()
 
-	// MCP Streamable HTTP endpoint
-	mux.HandleFunc("/mcp", handleMCP)
+	// MCP Streamable HTTP endpoint (authenticated)
+	mux.HandleFunc("/mcp", requireAuth(handleMCP))
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +68,7 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("SSH MCP Server starting on :%s with hosts: %v", port, hostMap)
+	log.Printf("SSH MCP Server starting on :%s with hosts: %v (auth: %v)", port, hostMap, apiKey != "")
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}
@@ -173,6 +181,35 @@ func execSSH(host, command string) (stdout, stderr string, exitCode int, err err
 	}
 
 	return stdoutBuf.String(), stderrBuf.String(), exitCode, nil
+}
+
+// ============================================================
+// Authentication middleware
+// ============================================================
+
+// requireAuth checks for API key in Authorization: Bearer or X-API-Key header.
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if apiKey == "" {
+			next(w, r)
+			return
+		}
+
+		token := ""
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			token = strings.TrimPrefix(auth, "Bearer ")
+		}
+		if token == "" {
+			token = r.Header.Get("X-API-Key")
+		}
+
+		if token != apiKey {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r)
+	}
 }
 
 // ============================================================

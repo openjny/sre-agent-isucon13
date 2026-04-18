@@ -136,6 +136,9 @@ var hostMap = {
   bench: benchVmIp
 }
 
+// Generate a random API key for MCP server authentication
+var mcpApiKey = uniqueString(resourceGroup().id, 'mcp-api-key', keyVault.id)
+
 module aca 'modules/aca.bicep' = {
   name: 'aca'
   params: {
@@ -145,6 +148,7 @@ module aca 'modules/aca.bicep' = {
     acrName: acr.name
     keyVaultName: keyVault.name
     hostMapJson: string(hostMap)
+    mcpApiKey: mcpApiKey
   }
 }
 
@@ -189,3 +193,4 @@ output acrName string = acr.name
 output acaEnvName string = aca.outputs.acaEnvName
 output acaEnvId string = aca.outputs.acaEnvId
 output keyVaultName string = keyVault.name
+output mcpApiKey string = mcpApiKey
