@@ -16,10 +16,13 @@
 │       ├── sre-agent.bicep       # SRE Agent (Microsoft.App/agents)
 │       ├── ssh-keygen.bicep      # SSH 鍵生成 (deploymentScript, 未使用)
 │       └── cross-rg-rbac.bicep   # cross-RG RBAC
-├── provisioning/                 # VM プロビジョニング (CSE で実行)
-│   ├── bootstrap.sh              # エントリ: 引数解析 → role 別実行
+├── scripts/
+│   ├── bootstrap.sh              # VM CSE エントリ: 引数解析 → role 別実行
 │   ├── setup-contest.sh          # MySQL, nginx, PowerDNS, Go app
-│   └── setup-bench.sh            # ベンチマーカービルド
+│   ├── setup-bench.sh            # ベンチマーカービルド
+│   ├── post-provision.sh         # SRE Agent 自動構成 (KB, Agents, MCP)
+│   ├── setup-ssh-keys.sh         # SSH 鍵生成 + KV 格納 + VM 配布
+│   └── yaml-to-api-json.py       # YAML → SRE Agent API JSON 変換
 ├── ssh-mcp-server/               # SSH MCP Server (Go)
 │   ├── main.go                   # MCP プロトコル + SSH exec
 │   ├── Dockerfile
@@ -34,11 +37,7 @@
 │       ├── isupipe-optimization-guide.md
 │       ├── benchmark-runbook.md
 │       └── server-topology.md
-├── scripts/
-│   ├── post-provision.sh         # SRE Agent 自動構成 (KB, Agents, MCP)
-│   ├── setup-ssh-keys.sh         # SSH 鍵生成 + KV 格納 + VM 配布
-│   └── yaml-to-api-json.py       # YAML → SRE Agent API JSON 変換
-├── docs/                         # ドキュメント
+├── docs/                         # プロジェクトドキュメント
 └── .vscode/mcp.json              # VS Code MCP Server 接続設定
 ```
 

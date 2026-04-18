@@ -135,7 +135,7 @@ ISUCON_REPO=/tmp/sre-agent-isucon13
 # Always fresh clone
 rm -rf "$ISUCON_REPO"
 git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
-cd "$ISUCON_REPO/provisioning"
+cd "$ISUCON_REPO/scripts"
 chmod +x bootstrap.sh setup-contest.sh setup-bench.sh
 bash bootstrap.sh '''
 
