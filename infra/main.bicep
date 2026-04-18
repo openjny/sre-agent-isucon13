@@ -87,6 +87,13 @@ module crossRgRbac 'modules/cross-rg-rbac.bicep' = {
 // Outputs
 // ============================================================
 
+// Required by azd for containerapp deployment
+output AZURE_RESOURCE_GROUP string = rgSystem.name
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = systemResources.outputs.acrLoginServer
+output AZURE_CONTAINER_REGISTRY_NAME string = systemResources.outputs.acrName
+output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = systemResources.outputs.acaEnvName
+output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = systemResources.outputs.acaEnvId
+
 output AZURE_LOCATION string = location
 output SRE_AGENT_LOCATION string = sreAgentLocation
 output SYSTEM_RESOURCE_GROUP string = rgSystem.name

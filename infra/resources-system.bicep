@@ -174,4 +174,6 @@ output vmBenchPrivateIp string = benchVmIp
 output sshMcpServerFqdn string = aca.outputs.sshMcpServerFqdn
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
+output acaEnvName string = aca.outputs.acaEnvName
+output acaEnvId string = aca.outputs.acaEnvId
 output keyVaultName string = keyVault.name
