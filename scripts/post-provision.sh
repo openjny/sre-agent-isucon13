@@ -96,7 +96,7 @@ for yaml_file in ./sre-config/agents/*.yaml; do
     -H "Content-Type: application/json" \
     -d @-)
 
-  if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "204" ]; then
+  if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "202" ] || [ "$http_code" = "204" ]; then
     echo "   ✅ ${agent_name}"
   else
     echo "   ⚠️  ${agent_name}: HTTP ${http_code}"
@@ -105,18 +105,10 @@ done
 echo ""
 
 # ── Step 3: Create MCP connector ─────────────────────────────────────────────
-echo "🔗 Step 3/4: Creating MCP connector..."
-
-if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
-  # Use ARM API to create MCP connector
-  az rest --method PUT \
-    --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors/ssh-mcp?api-version=${API_VERSION}" \
-    --body "{\"properties\":{\"dataConnectorType\":\"McpServer\",\"dataSource\":\"ssh-mcp\",\"url\":\"https://${MCP_FQDN}/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_API_KEY}\"}}}" \
-    -o none 2>/dev/null && echo "   ✅ ssh-mcp → https://${MCP_FQDN}/mcp" \
-    || echo "   ⚠️  MCP connector creation failed (may need manual setup at sre.azure.com)"
-else
-  echo "   ⚠️  MCP_FQDN or MCP_API_KEY not set"
-fi
+echo "🔗 Step 3/4: MCP connector..."
+echo "   Set up manually: sre.azure.com → Builder → Connectors → Add → MCP"
+echo "   URL: https://${MCP_FQDN}/mcp"
+echo "   Header: Authorization: Bearer $(azd env get-value MCP_API_KEY 2>/dev/null || echo '<run: azd env get-value MCP_API_KEY>')"
 echo ""
 
 # ── Step 4: Enable experimental tools ────────────────────────────────────────
