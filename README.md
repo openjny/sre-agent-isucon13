@@ -51,4 +51,6 @@ azd down --purge
 
 ## ライセンス
 
-MIT License。ISUCON13 ([isucon/isucon13](https://github.com/isucon/isucon13)) は MIT License (Copyright (c) 2023 ISUCON13 Contributors)。
+[MIT License](LICENSE)
+
+> ISUCON13 ([isucon/isucon13](https://github.com/isucon/isucon13)) は MIT License (Copyright (c) 2023 ISUCON13 Contributors)
