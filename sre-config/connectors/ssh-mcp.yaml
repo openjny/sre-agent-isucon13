@@ -1,5 +1,0 @@
-name: ssh-mcp
-type: AgentConnector
-properties:
-  dataConnectorType: McpServer
-  dataSource: ssh-mcp

@@ -49,7 +49,8 @@ resource sshKeyGen 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   }
   properties: {
     azCliVersion: '2.63.0'
-    retentionInterval: 'PT1H'
+    retentionInterval: 'P1D'
+    forceUpdateTag: 'stable-v1'
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
     environmentVariables: [

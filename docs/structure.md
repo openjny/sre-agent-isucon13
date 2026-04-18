@@ -14,15 +14,15 @@
 │       ├── aca.bicep             # ACA 環境 + SSH MCP Server コンテナ
 │       ├── monitoring.bicep      # Azure Monitor (オプション)
 │       ├── sre-agent.bicep       # SRE Agent (Microsoft.App/agents)
-│       ├── ssh-keygen.bicep      # SSH 鍵生成 (deploymentScript, 未使用)
+│       ├── ssh-keygen.bicep      # SSH 鍵生成 (deploymentScript → Key Vault)
 │       └── cross-rg-rbac.bicep   # cross-RG RBAC
 ├── scripts/
-│   ├── bootstrap.sh              # VM CSE エントリ: 引数解析 → role 別実行
-│   ├── setup-contest.sh          # MySQL, nginx, PowerDNS, Go app
-│   ├── setup-bench.sh            # ベンチマーカービルド
-│   ├── post-provision.sh         # SRE Agent 自動構成 (KB, Agents, MCP)
-│   ├── setup-ssh-keys.sh         # SSH 鍵生成 + KV 格納 + VM 配布
-│   └── yaml-to-api-json.py       # YAML → SRE Agent API JSON 変換
+│   ├── post-provision.sh            # azd hook entrypoint → post-configure-agent.sh
+│   ├── post-configure-agent.sh      # SRE Agent 構成 (KB, MCP, Agents, Tools)
+│   ├── provision-vm.sh              # Bicep CSE entrypoint: 共通セットアップ + dispatch
+│   ├── provision-vm-contest.sh      # MySQL, nginx, PowerDNS, Go app
+│   ├── provision-vm-benchmark.sh    # ベンチマーカービルド
+│   └── yaml-to-api-json.py          # YAML → SRE Agent API JSON 変換
 ├── ssh-mcp-server/               # SSH MCP Server (Go)
 │   ├── main.go                   # MCP プロトコル + SSH exec
 │   ├── Dockerfile
@@ -49,23 +49,17 @@ azd up
   ├─ Provision (Bicep):
   │   ├─ RG 2つ作成 (system + sreagent)
   │   ├─ VNet, NSG, NAT GW
-  │   ├─ Key Vault + deployer RBAC
+  │   ├─ Key Vault + deployer RBAC + SSH 鍵生成 (deploymentScript)
   │   ├─ ACR + ACA 環境 + SSH MCP Server (placeholder image)
-  │   ├─ VM x4 + Custom Script Extension (bootstrap.sh)
-  │   │   └─ git clone → setup-contest.sh / setup-bench.sh
+  │   ├─ VM x4 + Custom Script Extension (provision-vm.sh)
+  │   │   └─ git clone → provision-vm-contest.sh / provision-vm-benchmark.sh
   │   └─ SRE Agent (Australia East)
   ├─ Deploy: SSH MCP Server イメージ → ACR → ACA 更新
-  └─ Post-provision hook: (azd hook で自動実行されるが、
-      SSH 鍵は別途手動実行が必要)
-
-bash scripts/setup-ssh-keys.sh
-  └─ SSH 鍵生成 → Key Vault 格納 → 全 VM に公開鍵配布
-
-bash scripts/post-provision.sh
-  ├─ KB アップロード (azuresre.ai トークン)
-  ├─ Custom Agent 作成 (dataplane v2 API)
-  ├─ MCP Connector 作成 (dataplane v2 API)
-  └─ Experimental tools 有効化 (ARM API)
+  └─ Post-provision hook: post-provision.sh → post-configure-agent.sh
+      ├─ KB アップロード (azuresre.ai トークン)
+      ├─ MCP Connector 作成 (dataplane v2 API, Mcp + extendedProperties)
+      ├─ Custom Agent 作成 (dataplane v2 API)
+      └─ Experimental tools 有効化 (ARM API)
 ```
 
 ## 認証

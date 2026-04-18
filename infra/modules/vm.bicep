@@ -136,8 +136,8 @@ ISUCON_REPO=/tmp/sre-agent-isucon13
 rm -rf "$ISUCON_REPO"
 git clone --depth 1 https://github.com/openjny/sre-agent-isucon13.git "$ISUCON_REPO"
 cd "$ISUCON_REPO/scripts"
-chmod +x bootstrap.sh setup-contest.sh setup-bench.sh
-bash bootstrap.sh '''
+chmod +x provision-vm.sh provision-vm-contest.sh provision-vm-benchmark.sh
+bash provision-vm.sh '''
 
 resource cse 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
   parent: vm

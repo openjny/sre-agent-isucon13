@@ -24,25 +24,18 @@ azd up
 ```
 
 初回は Azure サブスクリプションとリージョンの選択を求められます。
-所要時間: 約 8 分。
+所要時間: 約 10 分。
 
-### 3. SSH 鍵セットアップ
+`azd up` が以下を自動実行します:
+- Bicep によるインフラプロビジョニング (VM, SRE Agent, ACA 等)
+- SSH MCP Server の ACA へのデプロイ
+- SRE Agent 構成 (KB, MCP Connector, Custom Agents, Experimental Tools)
 
-```bash
-bash scripts/setup-ssh-keys.sh
-```
-
-SSH 鍵ペアを生成し、Key Vault に秘密鍵を格納、全 VM に公開鍵を配布します。
-所要時間: 約 3 分。
-
-### 4. SRE Agent 構成
+手動で SRE Agent 構成だけ再実行したい場合:
 
 ```bash
-bash scripts/post-provision.sh
+bash scripts/post-configure-agent.sh
 ```
-
-SRE Agent の Knowledge Base, Custom Agents, MCP Connector を自動構成します。
-所要時間: 約 2 分。
 
 ## パラメータ
 

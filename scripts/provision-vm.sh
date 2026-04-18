@@ -1,14 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-# ISUCON13 Environment Bootstrap Script
-# Runs via Custom Script Extension on Azure VMs.
-# Usage: bootstrap.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>]
+# =============================================================================
+# provision-vm.sh — VM provisioning entrypoint (Custom Script Extension)
+#
+# Called by Bicep CSE to set up ISUCON13 environment on Azure VMs.
+# Installs base packages, creates isucon user, clones repo, installs Go,
+# then dispatches to provision-vm-contest.sh or provision-vm-benchmark.sh.
+#
+# Usage: provision-vm.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>]
+# Usage: provision.sh --role <contest|bench> --contest-ips <ip1,ip2,ip3> --bench-ip <ip> [--vm-index <n>]
+# =============================================================================
 
-LOG_FILE="/var/log/isucon13-bootstrap.log"
+LOG_FILE="/var/log/isucon13-provision.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "=== ISUCON13 Bootstrap started at $(date -u) ==="
+echo "=== ISUCON13 Provision started at $(date -u) ==="
 
 # Parse arguments
 ROLE=""
@@ -33,7 +40,7 @@ fi
 
 echo "Role: $ROLE, Contest IPs: $CONTEST_IPS, Bench IP: $BENCH_IP, VM Index: $VM_INDEX"
 
-# Save config for later use
+# Save config for later use by role-specific scripts
 mkdir -p /etc/isucon13
 cat > /etc/isucon13/config.env <<EOF
 ROLE=$ROLE
@@ -108,15 +115,17 @@ echo 'export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"' > /etc/profile.d/go.sh
 echo 'export GOPATH="$HOME/go"' >> /etc/profile.d/go.sh
 
 # ============================================================
-# 5. Run role-specific setup
+# 5. Dispatch to role-specific setup
 # ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [[ "$ROLE" == "contest" ]]; then
   echo "=== Setting up CONTEST server ==="
-  bash "$(dirname "$0")/setup-contest.sh"
+  bash "$SCRIPT_DIR/provision-vm-contest.sh"
 elif [[ "$ROLE" == "bench" ]]; then
   echo "=== Setting up BENCHMARK server ==="
-  bash "$(dirname "$0")/setup-bench.sh"
+  bash "$SCRIPT_DIR/provision-vm-benchmark.sh"
 fi
 
-echo "=== ISUCON13 Bootstrap completed at $(date -u) ==="
+echo "=== ISUCON13 Provision completed at $(date -u) ==="

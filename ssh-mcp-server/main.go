@@ -250,6 +250,13 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 	switch req.Method {
 	case "initialize":
 		handleInitialize(w, &req)
+	case "notifications/initialized":
+		// Client acknowledgment after initialize — no response needed
+		w.WriteHeader(http.StatusOK)
+		return
+	case "ping":
+		// SRE Agent sends ping for health checks — return empty result
+		writeResult(w, req.ID, map[string]interface{}{})
 	case "tools/list":
 		handleToolsList(w, &req)
 	case "tools/call":
