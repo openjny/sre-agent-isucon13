@@ -94,6 +94,9 @@ resource acaEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'ca-ssh-mcp-server'
   location: location
+  tags: {
+    'azd-service-name': 'ssh-mcp-server'
+  }
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
