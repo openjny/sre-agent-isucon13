@@ -58,7 +58,7 @@ CURL_ARGS=(-s -o /dev/null -w "%{http_code}" \
   -F "triggerIndexing=true")
 
 KB_COUNT=0
-for f in ./knowledge-base/*.md; do
+for f in ./sre-config/knowledge-base/*.md; do
   [ -f "$f" ] || continue
   CURL_ARGS+=(-F "files=@${f};type=text/plain")
   KB_COUNT=$((KB_COUNT + 1))

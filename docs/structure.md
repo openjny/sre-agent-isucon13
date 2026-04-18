@@ -24,15 +24,16 @@
 │   ├── main.go                   # MCP プロトコル + SSH exec
 │   ├── Dockerfile
 │   ├── go.mod / go.sum
-├── sre-config/agents/            # SRE Agent Custom Agent 定義
-│   ├── benchmark-runner.yaml
-│   ├── code-optimizer.yaml
-│   └── performance-investigator.yaml
-├── knowledge-base/               # SRE Agent Knowledge Base
-│   ├── isupipe-architecture.md
-│   ├── isupipe-optimization-guide.md
-│   ├── benchmark-runbook.md
-│   └── server-topology.md
+├── sre-config/                   # SRE Agent 構成ファイル
+│   ├── agents/                   # Custom Agent 定義
+│   │   ├── benchmark-runner.yaml
+│   │   ├── code-optimizer.yaml
+│   │   └── performance-investigator.yaml
+│   └── knowledge-base/           # Knowledge Base ドキュメント
+│       ├── isupipe-architecture.md
+│       ├── isupipe-optimization-guide.md
+│       ├── benchmark-runbook.md
+│       └── server-topology.md
 ├── scripts/
 │   ├── post-provision.sh         # SRE Agent 自動構成 (KB, Agents, MCP)
 │   ├── setup-ssh-keys.sh         # SSH 鍵生成 + KV 格納 + VM 配布
