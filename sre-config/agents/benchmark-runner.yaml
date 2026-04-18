@@ -36,5 +36,7 @@ system_prompt: |
 
 handoff_description: Executes ISUCON13 benchmarks and analyzes scoring results
 tools:
-  - exec
+  - azure_cli
+mcp_tools:
+  - ssh-mcp/*
 enable_skills: true

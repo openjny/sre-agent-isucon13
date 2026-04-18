@@ -27,5 +27,7 @@ system_prompt: |
 
 handoff_description: Investigates performance bottlenecks on ISUCON13 servers using system metrics, logs, and application analysis
 tools:
-  - exec
+  - azure_cli
+mcp_tools:
+  - ssh-mcp/*
 enable_skills: true

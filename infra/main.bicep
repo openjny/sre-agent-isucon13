@@ -104,5 +104,6 @@ output VM_CONTEST3_PRIVATE_IP string = systemResources.outputs.vmContest3Private
 output VM_BENCH_PRIVATE_IP string = systemResources.outputs.vmBenchPrivateIp
 output SSH_MCP_SERVER_FQDN string = systemResources.outputs.sshMcpServerFqdn
 output SRE_AGENT_NAME string = sreAgentResources.outputs.agentName
+output SRE_AGENT_ENDPOINT string = sreAgentResources.outputs.agentEndpoint
 output SRE_AGENT_PORTAL_URL string = 'https://sre.azure.com'
 output MCP_API_KEY string = systemResources.outputs.mcpApiKey

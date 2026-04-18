@@ -28,5 +28,7 @@ system_prompt: |
 
 handoff_description: Analyzes and optimizes ISUCON13 Go application code for performance
 tools:
-  - exec
+  - azure_cli
+mcp_tools:
+  - ssh-mcp/*
 enable_skills: true
