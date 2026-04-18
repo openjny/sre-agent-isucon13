@@ -108,13 +108,16 @@ echo ""
 echo "🔗 Step 3/4: Creating MCP connector..."
 if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
   TOKEN=$(get_token)
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/ssh-mcp" \
+  # Read base config from sre-config/connectors/ssh-mcp.yaml, inject runtime URL/headers
+  CONNECTOR_NAME=$(python3 "$SCRIPT_DIR/yaml-to-api-json.py" ./sre-config/connectors/ssh-mcp.yaml --name-only 2>/dev/null || echo "ssh-mcp")
+  CONNECTOR_JSON="{\"name\":\"${CONNECTOR_NAME}\",\"type\":\"AgentConnector\",\"properties\":{\"dataConnectorType\":\"McpServer\",\"dataSource\":\"ssh-mcp\",\"url\":\"https://${MCP_FQDN}/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_API_KEY}\"}}}"
+  http_code=$(echo "$CONNECTOR_JSON" | curl -s -o /dev/null -w "%{http_code}" \
+    -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/${CONNECTOR_NAME}" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"ssh-mcp\",\"type\":\"AgentConnector\",\"properties\":{\"dataConnectorType\":\"McpServer\",\"dataSource\":\"ssh-mcp\",\"url\":\"https://${MCP_FQDN}/mcp\",\"headers\":{\"Authorization\":\"Bearer ${MCP_API_KEY}\"}}}")
+    -d @-)
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "202" ]; then
-    echo "   ✅ ssh-mcp → https://${MCP_FQDN}/mcp"
+    echo "   ✅ ${CONNECTOR_NAME} → https://${MCP_FQDN}/mcp"
   else
     echo "   ⚠️  HTTP ${http_code}"
   fi
