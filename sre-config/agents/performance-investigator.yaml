@@ -29,5 +29,5 @@ handoff_description: Investigates performance bottlenecks on ISUCON13 servers us
 tools:
   - azure_cli
 mcp_tools:
-  - ssh-mcp/*
+  - isucon-mcp/*
 enable_skills: true

@@ -11,7 +11,7 @@
 │   └── modules/
 │       ├── network.bicep         # VNet, NSG, NAT Gateway
 │       ├── vm.bicep              # VM + Custom Script Extension
-│       ├── aca.bicep             # ACA 環境 + SSH MCP Server コンテナ
+│       ├── aca.bicep             # ACA 環境 + ISUCON MCP Server コンテナ
 │       ├── monitoring.bicep      # Azure Monitor (オプション)
 │       ├── sre-agent.bicep       # SRE Agent (Microsoft.App/agents)
 │       ├── ssh-keygen.bicep      # SSH 鍵生成 (deploymentScript → Key Vault)
@@ -23,8 +23,8 @@
 │   ├── provision-vm-contest.sh      # MySQL, nginx, PowerDNS, Go app
 │   ├── provision-vm-benchmark.sh    # ベンチマーカービルド
 │   └── yaml-to-api-json.py          # YAML → SRE Agent API JSON 変換
-├── ssh-mcp-server/               # SSH MCP Server (Go)
-│   ├── main.go                   # MCP プロトコル + SSH exec
+├── isucon-mcp-server/             # ISUCON MCP Server (Go)
+│   ├── main.go                   # MCP プロトコル + SSH exec + ベンチマーク管理
 │   ├── Dockerfile
 │   ├── go.mod / go.sum
 ├── sre-config/                   # SRE Agent 構成ファイル
@@ -45,16 +45,18 @@
 
 ```
 azd up
-  ├─ Package: Docker build → SSH MCP Server イメージ
+  ├─ Package: Docker build → ISUCON MCP Server イメージ
   ├─ Provision (Bicep):
   │   ├─ RG 2つ作成 (system + sreagent)
   │   ├─ VNet, NSG, NAT GW
-  │   ├─ Key Vault + deployer RBAC + SSH 鍵生成 (deploymentScript)
-  │   ├─ ACR + ACA 環境 + SSH MCP Server (placeholder image)
-  │   ├─ VM x4 + Custom Script Extension (provision-vm.sh)
-  │   │   └─ git clone → provision-vm-contest.sh / provision-vm-benchmark.sh
+  │   ├─ Key Vault + deployer RBAC + SSH 鍵 + TLS 証明書生成 (deploymentScript)
+  │   ├─ ACR + ACA 環境 + ISUCON MCP Server (placeholder image)
+  │   ├─ VM x4 (SystemAssigned MI + KV Secrets User RBAC)
+  │   │   └─ Custom Script Extension → provision-vm.sh
+  │   │       ├─ contest: KV から TLS cert/key 取得 → nginx 配置
+  │   │       └─ bench: KV から TLS cert 取得 → CA trust store 追加
   │   └─ SRE Agent (Australia East)
-  ├─ Deploy: SSH MCP Server イメージ → ACR → ACA 更新
+  ├─ Deploy: ISUCON MCP Server イメージ → ACR → ACA 更新
   └─ Post-provision hook: post-provision.sh → post-configure-agent.sh
       ├─ KB アップロード (azuresre.ai トークン)
       ├─ MCP Connector 作成 (dataplane v2 API, Mcp + extendedProperties)
@@ -68,4 +70,4 @@ azd up
 |-----|------------------|------|
 | SRE Agent データプレーン | `https://azuresre.ai` | KB, Agents, Connectors |
 | ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings |
-| SSH MCP Server | `Authorization: Bearer <API_KEY>` | exec ツール呼び出し |
+| ISUCON MCP Server | `Authorization: Bearer <API_KEY>` | exec/benchmark ツール呼び出し |

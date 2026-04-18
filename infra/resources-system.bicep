@@ -31,7 +31,7 @@ module network 'modules/network.bicep' = {
 }
 
 // ============================================================
-// Key Vault (for SSH private key used by SSH MCP Server)
+// Key Vault (for SSH private key used by ISUCON MCP Server)
 // ============================================================
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -58,7 +58,7 @@ resource kvDeployerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 
 // ============================================================
-// ACR (for SSH MCP Server container image)
+// ACR (for ISUCON MCP Server container image)
 // ============================================================
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -101,6 +101,7 @@ module contestVms 'modules/vm.bicep' = [
       role: 'contest'
       vmIndex: i
       privateIpAddress: contestVmIps[i - 1]
+      keyVaultName: keyVault.name
     }
   }
 ]
@@ -122,11 +123,12 @@ module benchVm 'modules/vm.bicep' = {
     role: 'bench'
     vmIndex: 1
     privateIpAddress: benchVmIp
+    keyVaultName: keyVault.name
   }
 }
 
 // ============================================================
-// ACA + SSH MCP Server
+// ACA + ISUCON MCP Server
 // ============================================================
 
 var hostMap = {
@@ -155,6 +157,31 @@ module aca 'modules/aca.bicep' = {
 // ============================================================
 // Monitoring (optional)
 // ============================================================
+
+// ── Key Vault access for VMs (to retrieve TLS cert during provisioning) ─────
+var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+
+resource kvVmRoleContest 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for i in range(0, 3): {
+    name: guid(keyVault.id, contestVms[i].outputs.vmPrincipalId, kvSecretsUserRoleId)
+    scope: keyVault
+    properties: {
+      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
+      principalId: contestVms[i].outputs.vmPrincipalId
+      principalType: 'ServicePrincipal'
+    }
+  }
+]
+
+resource kvVmRoleBench 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, benchVm.outputs.vmPrincipalId, kvSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
+    principalId: benchVm.outputs.vmPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 var allVmNames = [
   contestVms[0].outputs.vmName
@@ -187,7 +214,7 @@ output vmContest1PrivateIp string = contestVmIps[0]
 output vmContest2PrivateIp string = contestVmIps[1]
 output vmContest3PrivateIp string = contestVmIps[2]
 output vmBenchPrivateIp string = benchVmIp
-output sshMcpServerFqdn string = aca.outputs.sshMcpServerFqdn
+output mcpServerFqdn string = aca.outputs.mcpServerFqdn
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
 output acaEnvName string = aca.outputs.acaEnvName

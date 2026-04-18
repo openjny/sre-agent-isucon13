@@ -3,10 +3,10 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
-RUN CGO_ENABLED=0 go build -o ssh-mcp-server .
+RUN CGO_ENABLED=0 go build -o isucon-mcp-server .
 
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates openssh-client
-COPY --from=builder /app/ssh-mcp-server /usr/local/bin/
+COPY --from=builder /app/isucon-mcp-server /usr/local/bin/
 EXPOSE 8080
-ENTRYPOINT ["ssh-mcp-server"]
+ENTRYPOINT ["isucon-mcp-server"]

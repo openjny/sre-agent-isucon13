@@ -1,4 +1,4 @@
-module github.com/openjny/sre-agent-isucon13/ssh-mcp-server
+module github.com/openjny/sre-agent-isucon13/isucon-mcp-server
 
 go 1.22
 

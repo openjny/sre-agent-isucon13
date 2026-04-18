@@ -28,7 +28,7 @@ param mcpApiKey string
 // ============================================================
 
 resource acaIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-aca-ssh-mcp'
+  name: 'id-aca-isucon-mcp'
   location: location
 }
 
@@ -92,14 +92,14 @@ resource acaEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 // ============================================================
-// SSH MCP Server Container App
+// ISUCON MCP Server Container App
 // ============================================================
 
-resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: 'ca-ssh-mcp-server'
+resource mcpApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'ca-isucon-mcp-server'
   location: location
   tags: {
-    'azd-service-name': 'ssh-mcp-server'
+    'azd-service-name': 'isucon-mcp-server'
   }
   identity: {
     type: 'UserAssigned'
@@ -131,7 +131,7 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
     template: {
       containers: [
         {
-          name: 'ssh-mcp-server'
+          name: 'isucon-mcp-server'
           image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           resources: {
             cpu: json('0.5')
@@ -161,5 +161,5 @@ resource sshMcpApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 output acaEnvId string = acaEnv.id
 output acaEnvName string = acaEnv.name
-output sshMcpServerFqdn string = sshMcpApp.properties.configuration.ingress.fqdn
+output mcpServerFqdn string = mcpApp.properties.configuration.ingress.fqdn
 output acaIdentityPrincipalId string = acaIdentity.properties.principalId

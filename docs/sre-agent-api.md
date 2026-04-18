@@ -77,7 +77,7 @@ curl -X PUT "$AGENT_ENDPOINT/api/v2/extendedAgent/agents/{agent-name}" \
       "handoffDescription": "when to use this agent",
       "handoffs": [],
       "tools": ["azure_cli"],
-      "mcpTools": ["ssh-mcp/*"],
+      "mcpTools": ["isucon-mcp/*"],
       "allowParallelToolCalls": true,
       "enableSkills": true
     }
@@ -117,7 +117,7 @@ curl -X PUT "$AGENT_ENDPOINT/api/v2/extendedAgent/connectors/{connector-name}" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "ssh-mcp",
+    "name": "isucon-mcp",
     "type": "AgentConnector",
     "properties": {
       "dataConnectorType": "Mcp",

@@ -21,7 +21,7 @@ echo ""
 
 # ── Read azd outputs ─────────────────────────────────────────────────────────
 RG_SREAGENT=$(azd env get-value SREAGENT_RESOURCE_GROUP 2>/dev/null || echo "rg-isucon13-sreagent")
-MCP_FQDN=$(azd env get-value SSH_MCP_SERVER_FQDN 2>/dev/null || echo "")
+MCP_FQDN=$(azd env get-value MCP_SERVER_FQDN 2>/dev/null || echo "")
 MCP_API_KEY=$(azd env get-value MCP_API_KEY 2>/dev/null || echo "")
 SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
 
@@ -82,12 +82,12 @@ fi
 echo ""
 
 # ── Step 2: Create MCP connector ─────────────────────────────────────────────
-# MCP connector must be created before custom agents that reference it (mcpTools: ["ssh-mcp/*"])
+# MCP connector must be created before custom agents that reference it (mcpTools: ["isucon-mcp/*"])
 echo "🔗 Step 2/4: Creating MCP connector..."
 if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
   TOKEN=$(get_token)
   # Use Mcp type with extendedProperties (not McpServer with url/headers which silently fails)
-  CONNECTOR_NAME="ssh-mcp"
+  CONNECTOR_NAME="isucon-mcp"
   CONNECTOR_JSON="{\"name\":\"${CONNECTOR_NAME}\",\"type\":\"AgentConnector\",\"properties\":{\"dataConnectorType\":\"Mcp\",\"dataSource\":\"placeholder\",\"identity\":\"\",\"extendedProperties\":{\"type\":\"http\",\"endpoint\":\"https://${MCP_FQDN}/mcp\",\"authType\":\"BearerToken\",\"bearerToken\":\"${MCP_API_KEY}\"}}}"
   http_code=$(echo "$CONNECTOR_JSON" | curl -s -o /dev/null -w "%{http_code}" \
     -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/${CONNECTOR_NAME}" \

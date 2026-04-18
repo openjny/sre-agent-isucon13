@@ -28,7 +28,7 @@ azd up
 
 `azd up` が以下を自動実行します:
 - Bicep によるインフラプロビジョニング (VM, SRE Agent, ACA 等)
-- SSH MCP Server の ACA へのデプロイ
+- ISUCON MCP Server の ACA へのデプロイ
 - SRE Agent 構成 (KB, MCP Connector, Custom Agents, Experimental Tools)
 
 手動で SRE Agent 構成だけ再実行したい場合:
@@ -62,7 +62,7 @@ chmod 600 /tmp/key
 
 ## VS Code MCP 接続
 
-`.vscode/mcp.json` が含まれているため、VS Code で開くと SSH MCP Server に接続可能です。
+`.vscode/mcp.json` が含まれているため、VS Code で開くと ISUCON MCP Server に接続可能です。
 初回接続時に API Key の入力を求められます（`azd env get-value MCP_API_KEY` で取得）。
 
 ## クリーンアップ
@@ -76,6 +76,5 @@ azd down --purge
 | 問題 | 対処 |
 |------|------|
 | CSE 失敗 (VM プロビジョニング) | `az vm get-instance-view -g rg-isucon13-system -n <vm> --query instanceView.extensions` |
-| post-provision.sh で 401 | `az login` で User として再ログイン（SP ではなく） |
-| SSH MCP Server 接続不可 | `curl -s https://<FQDN>/health` で確認 |
+| ISUCON MCP Server 接続不可 | `curl -s https://<FQDN>/health` で確認 |
 | Key Vault アクセス拒否 | deployer に KV Secrets Officer が付与されているか確認 |

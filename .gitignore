@@ -11,7 +11,7 @@ infra/main.json
 .terraform/
 
 # Go binaries
-ssh-mcp-server/ssh-mcp-server
+isucon-mcp-server/isucon-mcp-server
 
 # SSH keys
 *.pem

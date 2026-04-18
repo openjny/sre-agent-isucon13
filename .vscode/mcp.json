@@ -3,17 +3,17 @@
     {
       "type": "promptString",
       "id": "mcp-api-key",
-      "description": "SSH MCP Server API Key (run: azd env get-value MCP_API_KEY)",
+      "description": "ISUCON MCP Server API Key (run: azd env get-value MCP_API_KEY)",
       "password": true
     },
     {
       "type": "promptString",
       "id": "mcp-url",
-      "description": "SSH MCP Server URL (run: azd env get-value SSH_MCP_SERVER_FQDN)"
+      "description": "ISUCON MCP Server URL (run: azd env get-value MCP_SERVER_FQDN)"
     }
   ],
   "servers": {
-    "isucon13-ssh": {
+    "isucon13-mcp": {
       "type": "http",
       "url": "https://${input:mcp-url}/mcp",
       "headers": {

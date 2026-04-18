@@ -7,10 +7,10 @@ infra:
   path: infra
 
 services:
-  ssh-mcp-server:
+  isucon-mcp-server:
     host: containerapp
-    project: ./ssh-mcp-server
-    image: ssh-mcp-server
+    project: ./isucon-mcp-server
+    image: isucon-mcp-server
     docker:
       path: ./Dockerfile
 

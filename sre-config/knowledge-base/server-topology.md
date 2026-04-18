@@ -18,7 +18,7 @@
 
 ## SSH Access
 - User: `isucon`
-- All VMs accessible via SSH MCP Server exec tool
+- All VMs accessible via ISUCON MCP Server exec tool
 - Commands: `exec vm1 "command"`, `exec bench "command"`
 
 ## Service Management
