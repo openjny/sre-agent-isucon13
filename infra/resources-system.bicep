@@ -45,6 +45,19 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+// Grant deployer Key Vault Secrets Officer so post-provision can store SSH keys
+var kvSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
+
+resource kvDeployerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, deployer().objectId, kvSecretsOfficerRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsOfficerRoleId)
+    principalId: deployer().objectId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // ============================================================
 // ACR (for SSH MCP Server container image)
 // ============================================================
