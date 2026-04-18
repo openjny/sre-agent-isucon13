@@ -32,14 +32,23 @@
 
 ## Running the Benchmark
 
+Use the dedicated benchmark tools instead of exec:
+
 ```
-exec bench "sudo -u isucon /home/isucon/run-benchmark.sh"
+benchmark_start
 ```
 
 ### Pretest only (validation without load):
 ```
-exec bench "sudo -u isucon /home/isucon/run-benchmark.sh --pretest-only"
+benchmark_start --pretest-only
 ```
+
+### Check benchmark progress/results:
+```
+benchmark_status <job_id>
+```
+
+If job_id is omitted, returns the latest job.
 
 ## Interpreting Results
 

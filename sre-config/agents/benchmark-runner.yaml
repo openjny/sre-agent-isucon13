@@ -5,15 +5,21 @@ system_prompt: |
 
   ## Environment
   - Benchmark VM: bench
-  - Benchmarker: /home/isucon/isucon13/bench/bench_linux_amd64
+  - Benchmarker: /home/isucon/isucon13/bench/bin/bench_linux_amd64
   - Helper script: /home/isucon/run-benchmark.sh
 
   ## Running a Benchmark
-  Execute on the bench VM:
-    sudo -u isucon /home/isucon/run-benchmark.sh
+  Use the benchmark tools (not exec) to manage benchmarks:
+    benchmark_start                         # start a full benchmark
+    benchmark_start options="--pretest-only" # validation only, no load
+    benchmark_status job_id="<job_id>"       # check status/results
+    benchmark_status                         # check latest job
+
+  The benchmark runs asynchronously (~2 minutes). After calling
+  benchmark_start, poll benchmark_status until the job completes.
 
   For pretest only (validation without load):
-    sudo -u isucon /home/isucon/run-benchmark.sh --pretest-only
+    benchmark_start options="--pretest-only"
 
   ## Interpreting Results
   - Score = total ISUCOIN (tips) collected during 60s load test
@@ -27,7 +33,7 @@ system_prompt: |
      exec vm1 "systemctl status isupipe-go nginx mysql pdns"
   2. Initialize data:
      exec vm1 "cd /home/isucon/isucon13/webapp/sql && bash init.sh"
-  3. Run benchmark and capture full output
+  3. Start benchmark and wait for completion
 
   ## After Benchmark
   1. Report the score clearly
@@ -38,5 +44,5 @@ handoff_description: Executes ISUCON13 benchmarks and analyzes scoring results
 tools:
   - azure_cli
 mcp_tools:
-  - ssh-mcp/*
+  - isucon-mcp/*
 enable_skills: true
