@@ -5,12 +5,17 @@
       "id": "mcp-api-key",
       "description": "SSH MCP Server API Key (run: azd env get-value MCP_API_KEY)",
       "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "mcp-url",
+      "description": "SSH MCP Server URL (run: azd env get-value SSH_MCP_SERVER_FQDN)"
     }
   ],
   "servers": {
     "isucon13-ssh": {
       "type": "http",
-      "url": "https://ca-ssh-mcp-server.orangesmoke-63d49e1d.southeastasia.azurecontainerapps.io/mcp",
+      "url": "https://${input:mcp-url}/mcp",
       "headers": {
         "Authorization": "Bearer ${input:mcp-api-key}"
       }
