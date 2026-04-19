@@ -61,19 +61,6 @@ echo ""
 bash "$SCRIPT_DIR/sreagent-clear.sh"
 echo ""
 
-# Helper: extract agent name from YAML (supports both v2 and legacy)
-agent_name_from_yaml() {
-  python3 -c "
-import yaml, sys
-with open(sys.argv[1]) as f:
-    spec = yaml.safe_load(f)
-if 'metadata' in spec:
-    print(spec['metadata'].get('name', ''))
-else:
-    print(spec.get('name', ''))
-" "$1" 2>/dev/null
-}
-
 # ── Memory ───────────────────────────────────────────────────────────────────
 echo "📚 Adding memory files..."
 MEMORY_FILES=("$ROOT_DIR"/sre-config/base/memory/*.md)
@@ -126,16 +113,17 @@ echo ""
 
 # ── Agents (two-pass for circular handoffs) ──────────────────────────────────
 echo "🤖 Creating agents (${AGENT_TIER}) — pass 1: stubs..."
+VENV_PYTHON="$ROOT_DIR/srectl/.venv/bin/python3"
 for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
   tmp_yaml=$(mktemp)
-  python3 -c "
+  "$VENV_PYTHON" -c "
 import yaml, sys
 with open(sys.argv[1]) as f:
     spec = yaml.safe_load(f)
-if 'spec' in spec and 'handoffs' in spec.get('spec', {}):
+if spec and 'spec' in spec and 'handoffs' in spec.get('spec', {}):
     spec['spec']['handoffs'] = []
-elif 'handoffs' in spec:
+elif spec and 'handoffs' in spec:
     spec['handoffs'] = []
 with open(sys.argv[2], 'w') as f:
     yaml.dump(spec, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
