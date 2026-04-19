@@ -1,0 +1,15 @@
+[project]
+name = "srectl"
+version = "0.1.0"
+description = "CLI for managing Azure SRE Agent resources"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+srectl = "srectl.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

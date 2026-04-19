@@ -20,4 +20,7 @@ id_ed25519*
 # OS
 .DS_Store
 Thumbs.db
-scripts/__pycache__/
+__pycache__/
+
+# srectl
+srectl/.venv/

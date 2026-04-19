@@ -12,7 +12,14 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SRECTL="python3 $SCRIPT_DIR/srectl.py"
+
+# Resolve srectl CLI: prefer uv, fallback to pip install
+if command -v uv &>/dev/null; then
+  SRECTL="uv run --project $ROOT_DIR/srectl srectl"
+else
+  pip install -q -e "$ROOT_DIR/srectl" 2>/dev/null
+  SRECTL="srectl"
+fi
 
 AGENT_TIER=$(azd env get-value AGENT_TIER 2>/dev/null || echo "L100")
 ALL_TIERS=(L100 L200 L300 L400)

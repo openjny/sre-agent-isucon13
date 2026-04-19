@@ -31,15 +31,15 @@ azd env set AGENT_TIER L200
 bash scripts/post-provision.sh
 ```
 
-個別リソースの操作には `srectl.py` CLI を使用:
+個別リソースの操作には `srectl` CLI を使用:
 
 ```bash
-python3 scripts/srectl.py context                                    # 接続確認
-python3 scripts/srectl.py agent list                                 # エージェント一覧
-python3 scripts/srectl.py agent apply -f sre-config/L100/agents/isucon.yaml  # エージェント作成
-python3 scripts/srectl.py skill add --dir sre-config/base/skills/mcp-tools-guide  # スキル作成
-python3 scripts/srectl.py memory add sre-config/base/memory/*.md               # メモリ追加
-python3 scripts/srectl.py tool list                                  # 利用可能ツール一覧
+uv run --project srectl srectl context                                    # 接続確認
+uv run --project srectl srectl agent list                                 # エージェント一覧
+uv run --project srectl srectl agent apply -f sre-config/L100/agents/isucon.yaml  # エージェント作成
+uv run --project srectl srectl skill add --dir sre-config/base/skills/isucon-mcp-guide  # スキル作成
+uv run --project srectl srectl memory add sre-config/base/memory/*.md               # メモリ追加
+uv run --project srectl srectl tool list                                  # 利用可能ツール一覧
 ```
 
 | Tier | Agents | Skills (累積) | 概要 |
