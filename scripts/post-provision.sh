@@ -118,11 +118,13 @@ for tier in "${ALL_TIERS[@]}"; do
   for yaml_file in "$ROOT_DIR/sre-config/${tier}/agents/"*.yaml; do
     [ -f "$yaml_file" ] || continue
     agent_name=$(python3 -c "
-import re, sys
+import yaml, sys
 with open(sys.argv[1]) as f:
-    for line in f:
-        m = re.match(r'^name:\s*(.*)', line)
-        if m: print(m.group(1).strip()); break
+    spec = yaml.safe_load(f)
+if 'metadata' in spec:
+    print(spec['metadata'].get('name', ''))
+else:
+    print(spec.get('name', ''))
 " "$yaml_file" 2>/dev/null)
     [ -z "$agent_name" ] && continue
     # Check if this agent exists in the current tier
@@ -130,11 +132,13 @@ with open(sys.argv[1]) as f:
     for active in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
       [ -f "$active" ] || continue
       active_name=$(python3 -c "
-import re, sys
+import yaml, sys
 with open(sys.argv[1]) as f:
-    for line in f:
-        m = re.match(r'^name:\s*(.*)', line)
-        if m: print(m.group(1).strip()); break
+    spec = yaml.safe_load(f)
+if 'metadata' in spec:
+    print(spec['metadata'].get('name', ''))
+else:
+    print(spec.get('name', ''))
 " "$active" 2>/dev/null)
       [ "$agent_name" = "$active_name" ] && exists=true && break
     done
@@ -156,6 +160,31 @@ az rest --method PATCH \
   || echo "   ⚠️  Could not enable tools"
 echo ""
 
+# ── HTTP Trigger (create + execute) ─────────────────────────────────────────
+echo "🚀 Creating and executing contest trigger..."
+CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から60分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
+
+# Create trigger and capture ID
+TRIGGER_OUTPUT=$($SRECTL trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>&1)
+echo "$TRIGGER_OUTPUT"
+TRIGGER_ID=$(echo "$TRIGGER_OUTPUT" | grep "Trigger ID:" | awk '{print $NF}')
+if [ -n "$TRIGGER_ID" ]; then
+  azd env set TRIGGER_ID "$TRIGGER_ID" 2>/dev/null
+  echo "   Saved TRIGGER_ID=$TRIGGER_ID"
+
+  # Execute trigger and capture thread ID
+  EXEC_OUTPUT=$($SRECTL trigger execute "$TRIGGER_ID" 2>&1)
+  echo "$EXEC_OUTPUT"
+  THREAD_ID=$(echo "$EXEC_OUTPUT" | grep "Thread ID:" | awk '{print $NF}')
+  if [ -n "$THREAD_ID" ]; then
+    azd env set THREAD_ID "$THREAD_ID" 2>/dev/null
+    echo "   Saved THREAD_ID=$THREAD_ID"
+  fi
+else
+  echo "   ⚠️  Could not create trigger"
+fi
+echo ""
+
 # ── Verify ───────────────────────────────────────────────────────────────────
 echo "============================================="
 echo "  📋 Status (${AGENT_TIER})"
@@ -165,7 +194,13 @@ $SRECTL agent list
 $SRECTL skill list
 $SRECTL memory list
 $SRECTL connector list
+$SRECTL trigger list
 echo ""
 echo "============================================="
 echo "  ✅ Done! (Tier: ${AGENT_TIER})"
 echo "============================================="
+echo ""
+if [ -n "${THREAD_ID:-}" ]; then
+  echo "  Watch contest: bash scripts/watch-sreagent.sh"
+  echo "  Thread ID:     $THREAD_ID"
+fi

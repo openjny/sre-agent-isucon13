@@ -62,9 +62,8 @@ spec:
     Stop:
     - type: prompt
       prompt: |
-        The agent is about to stop. Check if the ISUCON contest time limit has been reached.
+        Check if the ISUCON contest time limit has been reached.
         If the contest is still ongoing, the agent MUST continue working on optimizations.
-        The agent stops at turn 250 by default, but the contest may still have time remaining.
 
         $ARGUMENTS
 
@@ -73,5 +72,5 @@ spec:
         - {"ok": false, "reason": "Contest is still ongoing. Continue optimizing — review recent benchmark results and apply the next improvement."} if there is still time remaining
       model: ReasoningFast
       timeout: 30
-      failMode: deny
+      failMode: block
       maxRejections: 25
