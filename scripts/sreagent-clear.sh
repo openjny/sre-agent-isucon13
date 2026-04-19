@@ -61,12 +61,26 @@ for s in $SKILLS; do
   $SRECTL skill delete "$s" 2>/dev/null
 done
 
-# ── Delete connectors ────────────────────────────────────────────────────────
+# ── Delete connectors (MCP etc.) ─────────────────────────────────────────────
 echo "🗑️  Deleting connectors..."
 CONNECTORS=$($SRECTL connector list 2>/dev/null | awk '{print $1}' | grep -v "^(" | grep -v "^$")
 for c in $CONNECTORS; do
   $SRECTL connector delete "$c" 2>/dev/null
 done
+
+# ── Disable tools ────────────────────────────────────────────────────────────
+echo "🗑️  Disabling tools..."
+RG_SREAGENT=$(azd env get-value SREAGENT_RESOURCE_GROUP 2>/dev/null || echo "rg-isucon13-sreagent")
+SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
+ARM_AGENT_NAME=$(az resource list -g "$RG_SREAGENT" --resource-type "Microsoft.App/agents" --query "[0].name" -o tsv 2>/dev/null || echo "")
+if [ -n "$ARM_AGENT_NAME" ]; then
+  AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_SREAGENT}/providers/Microsoft.App/agents/${ARM_AGENT_NAME}"
+  az rest --method PATCH \
+    --url "https://management.azure.com${AGENT_RESOURCE_ID}?api-version=2025-05-01-preview" \
+    --body '{"properties":{"experimentalSettings":{"EnableWorkspaceTools":false}}}' \
+    --output none 2>/dev/null && echo "   ✅ Tools disabled" \
+    || echo "   ⚠️  Could not disable tools"
+fi
 
 # ── Clear azd env vars ───────────────────────────────────────────────────────
 azd env set TRIGGER_ID "" 2>/dev/null
