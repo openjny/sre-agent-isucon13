@@ -8,7 +8,7 @@ Usage:
     srectl context                        Show current connection info
     srectl agent list                     List custom agents
     srectl agent get <name>               Get agent details
-    srectl agent add -f <yaml>            Create/update agent from YAML
+    srectl agent apply -f <yaml>          Create/update agent from YAML
     srectl agent delete <name>            Delete agent
     srectl skill list                     List skills
     srectl skill get <name>               Get skill details
@@ -1215,7 +1215,7 @@ def build_parser() -> argparse.ArgumentParser:
     ag.add_argument("name")
     ag.set_defaults(func=cmd_agent_get)
 
-    aa = agent_sub.add_parser("add", help="Create/update agent from YAML")
+    aa = agent_sub.add_parser("apply", help="Create/update agent from YAML")
     aa.add_argument("-f", "--file", required=True, help="Agent YAML file")
     aa.set_defaults(func=cmd_agent_add)
 

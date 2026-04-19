@@ -79,14 +79,14 @@ content = open(sys.argv[1]).read()
 content = re.sub(r'^handoffs:\s*\n(  - .+\n)*', 'handoffs:\n', content, flags=re.MULTILINE)
 open(sys.argv[2], 'w').write(content)
 " "$yaml_file" "$tmp_yaml"
-  $SRECTL agent add -f "$tmp_yaml" || true
+  $SRECTL agent apply -f "$tmp_yaml" || true
   rm -f "$tmp_yaml"
 done
 
 echo "🤖 Creating agents (${AGENT_TIER}) — pass 2: with handoffs..."
 for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
-  $SRECTL agent add -f "$yaml_file"
+  $SRECTL agent apply -f "$yaml_file"
 done
 echo ""
 

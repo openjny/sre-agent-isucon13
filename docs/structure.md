@@ -66,7 +66,7 @@ azd up
   └─ Post-provision hook: post-provision.sh (srectl.py CLI 経由)
       ├─ メモリ追加 (srectl memory add)
       ├─ Skills デプロイ (srectl skill add, base + 累積 L{n}/skills/)
-      ├─ Custom Agent 作成 (srectl agent add, L{current}/agents/)
+      ├─ Custom Agent 作成 (srectl agent apply, L{current}/agents/)
       ├─ ダウングレード cleanup (srectl skill/agent delete)
       └─ Experimental tools 有効化 (ARM API)
 ```

@@ -36,7 +36,7 @@ bash scripts/post-provision.sh
 ```bash
 python3 scripts/srectl.py context                                    # 接続確認
 python3 scripts/srectl.py agent list                                 # エージェント一覧
-python3 scripts/srectl.py agent add -f sre-config/L100/agents/isucon.yaml  # エージェント作成
+python3 scripts/srectl.py agent apply -f sre-config/L100/agents/isucon.yaml  # エージェント作成
 python3 scripts/srectl.py skill add --dir sre-config/base/skills/mcp-tools-guide  # スキル作成
 python3 scripts/srectl.py memory add sre-config/base/memory/*.md               # メモリ追加
 python3 scripts/srectl.py tool list                                  # 利用可能ツール一覧
