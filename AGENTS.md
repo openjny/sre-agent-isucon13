@@ -39,7 +39,7 @@ bash scripts/sreagent-clear.sh
 bash scripts/sreagent-setup.sh L100
 
 # エージェントの動向をウォッチ
-bash scripts/watch-sreagent.sh
+bash scripts/sreagent-run.sh --watch
 ```
 
 個別リソースの操作には `srectl` CLI を使用:
