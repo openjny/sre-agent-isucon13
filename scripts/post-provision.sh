@@ -64,7 +64,26 @@ done
 echo ""
 
 # ── Agents ───────────────────────────────────────────────────────────────────
-echo "🤖 Creating agents (${AGENT_TIER})..."
+# Two-pass creation to resolve circular handoff dependencies:
+#   Pass 1: Create agents without handoffs (so all names exist)
+#   Pass 2: Update agents with handoffs
+echo "🤖 Creating agents (${AGENT_TIER}) — pass 1: stubs..."
+for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
+  [ -f "$yaml_file" ] || continue
+  # Create a temp YAML with handoffs list emptied
+  tmp_yaml=$(mktemp)
+  python3 -c "
+import re, sys
+content = open(sys.argv[1]).read()
+# Replace handoffs block (key + list items) with empty list
+content = re.sub(r'^handoffs:\s*\n(  - .+\n)*', 'handoffs:\n', content, flags=re.MULTILINE)
+open(sys.argv[2], 'w').write(content)
+" "$yaml_file" "$tmp_yaml"
+  $SRECTL agent add -f "$tmp_yaml" || true
+  rm -f "$tmp_yaml"
+done
+
+echo "🤖 Creating agents (${AGENT_TIER}) — pass 2: with handoffs..."
 for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
   $SRECTL agent add -f "$yaml_file"
