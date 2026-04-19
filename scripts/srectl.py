@@ -32,6 +32,17 @@ Usage:
     srectl tool list                      List all available tools
     srectl tool add --name <n> ...        Add a Python tool
     srectl tool delete <name>             Delete a custom tool
+    srectl trigger create --name <n> --prompt <p>  Create HTTP trigger
+    srectl trigger list                   List triggers
+    srectl trigger execute <id>           Execute a trigger
+    srectl trigger delete <id>            Delete a trigger
+    srectl thread messages <id>           Get thread messages
+    srectl thread watch <id>              Watch thread messages (poll)
+    srectl contest kick [--prompt <p>]    Create trigger + execute + watch
+    srectl hook add --name <n> --json <j> Create/update a hook
+    srectl hook list                      List hooks
+    srectl hook get <name>                Get hook details
+    srectl hook delete <name>             Delete a hook
 """
 
 from __future__ import annotations
@@ -43,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -109,6 +121,18 @@ def get_token() -> str:
     ])
     if not token:
         _die("Failed to get access token (az account get-access-token)")
+    return token
+
+
+def get_arm_token() -> str:
+    """Get Azure ARM token (for HTTP trigger execute and thread APIs)."""
+    token = _run([
+        "az", "account", "get-access-token",
+        "--resource", "https://management.azure.com",
+        "--query", "accessToken", "-o", "tsv",
+    ])
+    if not token:
+        _die("Failed to get ARM access token")
     return token
 
 
@@ -832,6 +856,317 @@ def cmd_tool_delete(args: argparse.Namespace) -> None:
         _die(f"tool/{args.name}: HTTP {code}")
 
 
+# ── HTTP Trigger commands ────────────────────────────────────────────────────
+
+
+# ── Hook commands ────────────────────────────────────────────────────────────
+
+
+def cmd_hook_add(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    body = json.loads(args.json)
+    name = body.get("name", args.name)
+    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/hooks/{name}", body=body)
+    if code in (200, 201, 202):
+        _ok(f"hook/{name}")
+    else:
+        _die(f"hook/{name}: HTTP {code} — {data}")
+
+
+def cmd_hook_list(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    code, data = api_request(endpoint, token, "GET", "/api/v2/extendedAgent/hooks")
+    if code != 200:
+        _die(f"HTTP {code}: {data}")
+    hooks = data.get("value", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    if not hooks:
+        print("(no hooks)")
+        return
+    for h in hooks:
+        name = h.get("name", "?")
+        htype = h.get("type", "?")
+        props = h.get("properties", {})
+        event = props.get("eventType", "?")
+        desc = (props.get("description", "") or "")[:50]
+        print(f"  {name:30s} type={htype}  event={event}  {desc}")
+
+
+def cmd_hook_get(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    code, data = api_request(endpoint, token, "GET", f"/api/v2/extendedAgent/hooks/{args.name}")
+    if code != 200:
+        _die(f"HTTP {code}: {data}")
+    _print_json(data)
+
+
+def cmd_hook_delete(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/hooks/{args.name}")
+    if code in (200, 202, 204, 404):
+        _ok(f"deleted hook/{args.name}")
+    else:
+        _die(f"hook/{args.name}: HTTP {code}")
+
+
+def cmd_trigger_create(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    body = {
+        "name": args.name,
+        "description": args.description or "",
+        "agentPrompt": args.prompt,
+        "agent": args.agent or "isucon",
+        "agentMode": args.mode or "autonomous",
+    }
+    if args.thread_id:
+        body["threadId"] = args.thread_id
+    code, data = api_request(endpoint, token, "POST", "/api/v1/httptriggers/create", body=body)
+    if code in (200, 201, 202):
+        if isinstance(data, dict):
+            trigger_id = data.get("triggerId", "?")
+            trigger_url = data.get("triggerUrl", "?")
+            print(f"Trigger ID:  {trigger_id}")
+            print(f"Trigger URL: {trigger_url}")
+            _ok(f"trigger/{args.name}")
+        else:
+            _print_json(data)
+    else:
+        _die(f"trigger/{args.name}: HTTP {code} — {data}")
+
+
+def cmd_trigger_list(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    code, data = api_request(endpoint, token, "GET", "/api/v1/httptriggers")
+    if code != 200:
+        _die(f"HTTP {code}: {data}")
+    triggers = data if isinstance(data, list) else data.get("value", data.get("triggers", [])) if isinstance(data, dict) else []
+    if not triggers:
+        print("(no triggers)")
+        return
+    for t in triggers:
+        name = t.get("name", "?")
+        tid = t.get("triggerId", t.get("id", "?"))
+        enabled = "on" if t.get("enabled", True) else "off"
+        agent = t.get("agent", "?")
+        print(f"  {name:30s} id={tid}  agent={agent}  {enabled}")
+
+
+def cmd_trigger_execute(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    # Trigger execute requires ARM token
+    trigger_id = args.trigger_id
+
+    payload: dict | None = None
+    if args.data:
+        try:
+            payload = json.loads(args.data)
+        except json.JSONDecodeError:
+            _die(f"Invalid JSON: {args.data}")
+
+    code, data = api_request(endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute", body=payload)
+    if code in (200, 202):
+        if isinstance(data, dict):
+            execution = data.get("execution", data)
+            thread_id = execution.get("threadId", "?")
+            print(f"Thread ID: {thread_id}")
+            _ok(f"trigger executed")
+        else:
+            _print_json(data)
+    else:
+        _die(f"trigger execute: HTTP {code} — {data}")
+
+
+def cmd_trigger_delete(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    code, data = api_request(endpoint, token, "DELETE", f"/api/v1/httptriggers/{args.trigger_id}")
+    if code in (200, 202, 204, 404):
+        _ok(f"deleted trigger/{args.trigger_id}")
+    else:
+        _die(f"trigger: HTTP {code}")
+
+
+# ── Thread commands ──────────────────────────────────────────────────────────
+
+
+def _fetch_messages(endpoint: str, token: str, thread_id: str, top: int = 20, skip: int = 0) -> list:
+    """Fetch thread messages."""
+    code, data = api_request(
+        endpoint, token, "GET",
+        f"/api/v1/threads/{thread_id}/messages?skip={skip}&top={top}&orderby=timestamp+desc",
+    )
+    if code != 200:
+        print(f"  ⚠️  HTTP {code}", file=sys.stderr)
+        return []
+    if isinstance(data, dict):
+        return data.get("value", [])
+    return data if isinstance(data, list) else []
+
+
+def _format_message(msg: dict) -> str:
+    """Format a single thread message for display."""
+    author = msg.get("author", {})
+    role = author.get("role", "?") if isinstance(author, dict) else "?"
+    ts = msg.get("timeStamp", msg.get("timestamp", ""))
+    content = msg.get("text", "")
+
+    # Role short names
+    role_map = {"SREAgent": "agent", "User": "user", "System": "system"}
+    role = role_map.get(role, role)
+
+    # Skip empty or tool-only messages
+    if not content or not content.strip():
+        return ""
+
+    # Truncate long content for display
+    if len(content) > 500:
+        content = content[:500] + "..."
+    # Short timestamp (HH:MM:SS)
+    if "T" in ts:
+        ts = ts.split("T")[1][:8]
+    return f"[{ts}] {role}: {content}"
+
+
+def cmd_thread_messages(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    messages = _fetch_messages(endpoint, token, args.thread_id, top=args.top)
+    if not messages:
+        print("(no messages)")
+        return
+    # Print in chronological order (API returns desc)
+    for msg in reversed(messages):
+        line = _format_message(msg)
+        if line:
+            print(line, flush=True)
+
+
+def cmd_thread_watch(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    thread_id = args.thread_id
+    interval = args.interval
+    seen_ids: set[str] = set()
+
+    print(f"Watching thread {thread_id} (Ctrl+C to stop, polling every {interval}s)")
+    print("-" * 60)
+
+    try:
+        while True:
+            messages = _fetch_messages(endpoint, token, thread_id, top=20)
+            # Print new messages in chronological order
+            new_msgs = []
+            for msg in reversed(messages):
+                msg_id = msg.get("id", msg.get("timestamp", ""))
+                if msg_id and msg_id not in seen_ids:
+                    seen_ids.add(msg_id)
+                    new_msgs.append(msg)
+            for msg in new_msgs:
+                line = _format_message(msg)
+                if line:
+                    print(line, flush=True)
+
+            print(f"--- ({interval}s) ---", flush=True)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n(stopped)")
+
+
+# ── Contest commands ─────────────────────────────────────────────────────────
+
+
+def cmd_contest_kick(args: argparse.Namespace) -> None:
+    endpoint, token = _get_ctx(args)
+    arm_token = get_arm_token()
+
+    time_limit = args.time_limit
+    prompt = args.prompt or f"ISUCON の競技を開始してください。制限時間は今から{time_limit}分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
+    agent = args.agent or "isucon"
+    trigger_name = args.name or "start-contest"
+
+    # Step 1: Create trigger
+    print(f"Creating trigger '{trigger_name}'...")
+    body = {
+        "name": trigger_name,
+        "description": f"ISUCON contest kick ({time_limit}min)",
+        "agentPrompt": prompt,
+        "agent": agent,
+        "agentMode": "autonomous",
+    }
+    code, data = api_request(endpoint, token, "POST", "/api/v1/httptriggers/create", body=body)
+    if code not in (200, 201, 202):
+        _die(f"Failed to create trigger: HTTP {code} — {data}")
+
+    trigger_id = data.get("triggerId", "") if isinstance(data, dict) else ""
+    if not trigger_id:
+        _die(f"No triggerId in response: {data}")
+    print(f"  Trigger ID: {trigger_id}")
+
+    # Step 2: Execute trigger
+    print("Executing trigger...")
+    code, data = api_request(endpoint, arm_token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute")
+    if code not in (200, 202):
+        _die(f"Failed to execute trigger: HTTP {code} — {data}")
+
+    execution = data.get("execution", data) if isinstance(data, dict) else {}
+    thread_id = execution.get("threadId", "")
+    if not thread_id:
+        _die(f"No threadId in response: {data}")
+
+    print(f"  Thread ID:  {thread_id}")
+    print(f"  Portal:     https://sre.azure.com")
+    _ok(f"Contest kicked! Time limit: {time_limit}min")
+    print("")
+
+    # Step 3: Watch
+    if not args.no_watch:
+        print(f"Watching thread (Ctrl+C to stop, polling every {args.interval}s)")
+        print("-" * 60)
+        seen_ids: set[str] = set()
+        try:
+            while True:
+                messages = _fetch_messages(endpoint, token, thread_id, top=20)
+                new_msgs = []
+                for msg in reversed(messages):
+                    msg_id = msg.get("id", msg.get("timestamp", ""))
+                    if msg_id and msg_id not in seen_ids:
+                        seen_ids.add(msg_id)
+                        new_msgs.append(msg)
+                for msg in new_msgs:
+                    line = _format_message(msg)
+                    if line:
+                        print(line, flush=True)
+                print(f"--- ({args.interval}s) ---", flush=True)
+                time.sleep(args.interval)
+        except KeyboardInterrupt:
+            print("\n(stopped watching)")
+
+
+def cmd_contest_watch(args: argparse.Namespace) -> None:
+    """Alias for thread watch with contest-friendly defaults."""
+    endpoint, token = _get_ctx(args)
+    thread_id = args.thread_id
+    interval = args.interval
+    seen_ids: set[str] = set()
+
+    print(f"Watching contest thread {thread_id} (Ctrl+C to stop)")
+    print("-" * 60)
+
+    try:
+        while True:
+            messages = _fetch_messages(endpoint, token, thread_id, top=20)
+            new_msgs = []
+            for msg in reversed(messages):
+                msg_id = msg.get("id", msg.get("timestamp", ""))
+                if msg_id and msg_id not in seen_ids:
+                    seen_ids.add(msg_id)
+                    new_msgs.append(msg)
+            for msg in new_msgs:
+                line = _format_message(msg)
+                if line:
+                    print(line, flush=True)
+            print(f"--- ({interval}s) ---", flush=True)
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n(stopped)")
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -989,6 +1324,26 @@ def build_parser() -> argparse.ArgumentParser:
     agd = ag_sub.add_parser("delete", help="Delete GitHub PAT")
     agd.set_defaults(func=cmd_auth_github_delete)
 
+    # hook
+    hook = sub.add_parser("hook", help="Manage hooks")
+    hook_sub = hook.add_subparsers(dest="action")
+
+    ha = hook_sub.add_parser("add", help="Create/update a hook")
+    ha.add_argument("--name", required=True, help="Hook name")
+    ha.add_argument("--json", required=True, help="Hook JSON body")
+    ha.set_defaults(func=cmd_hook_add)
+
+    hl = hook_sub.add_parser("list", help="List hooks")
+    hl.set_defaults(func=cmd_hook_list)
+
+    hg = hook_sub.add_parser("get", help="Get hook details")
+    hg.add_argument("name", help="Hook name")
+    hg.set_defaults(func=cmd_hook_get)
+
+    hd = hook_sub.add_parser("delete", help="Delete a hook")
+    hd.add_argument("name", help="Hook name")
+    hd.set_defaults(func=cmd_hook_delete)
+
     # connector
     conn = sub.add_parser("connector", help="Manage connectors")
     conn_sub = conn.add_subparsers(dest="action")
@@ -1033,6 +1388,63 @@ def build_parser() -> argparse.ArgumentParser:
     td = tool_sub.add_parser("delete", help="Delete a custom tool")
     td.add_argument("name", help="Tool name")
     td.set_defaults(func=cmd_tool_delete)
+
+    # trigger
+    trigger = sub.add_parser("trigger", help="Manage HTTP triggers")
+    trigger_sub = trigger.add_subparsers(dest="action")
+
+    trc = trigger_sub.add_parser("create", help="Create an HTTP trigger")
+    trc.add_argument("--name", required=True, help="Trigger name")
+    trc.add_argument("--prompt", required=True, help="Agent prompt text")
+    trc.add_argument("--description", default="", help="Trigger description")
+    trc.add_argument("--agent", default="isucon", help="Agent name (default: isucon)")
+    trc.add_argument("--mode", choices=["autonomous", "review"], default="autonomous", help="Agent mode")
+    trc.add_argument("--thread-id", help="Existing thread ID to reuse")
+    trc.set_defaults(func=cmd_trigger_create)
+
+    trl = trigger_sub.add_parser("list", help="List triggers")
+    trl.set_defaults(func=cmd_trigger_list)
+
+    tre = trigger_sub.add_parser("execute", help="Execute a trigger")
+    tre.add_argument("trigger_id", help="Trigger ID")
+    tre.add_argument("--data", help="JSON payload to send")
+    tre.set_defaults(func=cmd_trigger_execute)
+
+    trd = trigger_sub.add_parser("delete", help="Delete a trigger")
+    trd.add_argument("trigger_id", help="Trigger ID")
+    trd.set_defaults(func=cmd_trigger_delete)
+
+    # thread
+    thread = sub.add_parser("thread", help="Manage threads")
+    thread_sub = thread.add_subparsers(dest="action")
+
+    thm = thread_sub.add_parser("messages", help="Get thread messages")
+    thm.add_argument("thread_id", help="Thread ID")
+    thm.add_argument("--top", type=int, default=20, help="Number of messages (default: 20)")
+    thm.set_defaults(func=cmd_thread_messages)
+
+    thw = thread_sub.add_parser("watch", help="Watch thread messages (poll)")
+    thw.add_argument("thread_id", help="Thread ID")
+    thw.add_argument("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+    thw.set_defaults(func=cmd_thread_watch)
+
+    # contest (shortcuts)
+    contest = sub.add_parser("contest", help="Contest management shortcuts")
+    contest_sub = contest.add_subparsers(dest="action")
+
+    ck = contest_sub.add_parser("kick", help="Create trigger + execute + watch")
+    ck.add_argument("--name", default="start-contest", help="Trigger name (default: start-contest)")
+    ck.add_argument("--prompt", help="Custom agent prompt (default: standard ISUCON prompt)")
+    ck.add_argument("--agent", default="isucon", help="Agent name (default: isucon)")
+    ck.add_argument("--time-limit", type=int, default=60, help="Time limit in minutes (default: 60)")
+    ck.add_argument("--no-watch", action="store_true", help="Don't watch after kick")
+    ck.add_argument("--interval", type=int, default=30, help="Watch poll interval in seconds (default: 30)")
+    ck.set_defaults(func=cmd_contest_kick)
+
+    cw = contest_sub.add_parser("watch", help="Watch a contest thread")
+    cw.add_argument("thread_id", help="Thread ID")
+    cw.add_argument("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+    cw.set_defaults(func=cmd_contest_watch)
 
     return p
 

@@ -1,5 +1,5 @@
 ---
-name: mcp-tools-guide
+name: isucon-mcp-guide
 description: Guide for using ISUCON MCP Server tools (exec, benchmark_start, benchmark_status) to interact with contest VMs and run benchmarks
 ---
 

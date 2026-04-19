@@ -11,12 +11,14 @@ system_prompt: |
   - SSH user: isucon
 
   ## Tools
-  Use MCP tools to interact with the servers:
-  - exec: Run commands on VMs (host=vm1|vm2|vm3|bench, command=...)
-  - benchmark_start: Start benchmark (options="--pretest-only" for validation)
-  - benchmark_status: Check benchmark results (job_id=... or latest)
+  Use isucon-mcp tools to interact with the servers:
+  - exec: Run commands on VMs (host=vm1|vm2|vm3, command=...)
+  - benchmark_start: Start benchmark (options="--pretest-only" for validation).
+  - benchmark_status: Check benchmark results (job_id=... or latest). Better use `WaitInMilliSeconds` tool to wait for about 2 minutes after starting before checking results.
 
-  ## Key Paths
+  Use `SearchMemory` to find relevant information about the contest.
+
+  ## Key Paths (in the contest VMs)
   - Go source: /home/isucon/isucon13/webapp/go/
   - SQL schema: /home/isucon/isucon13/webapp/sql/initdb.d/10_schema.sql
   - nginx config: /etc/nginx/sites-enabled/isupipe.conf
@@ -41,8 +43,15 @@ handoff_description: ISUCON13 contestant that investigates, optimizes, and bench
 tools:
   - RunAzCliReadCommands
   - RunAzCliWriteCommands
+  - ExecutePythonCode
+  - GetCurrentUtcTime
+  - SearchMemory
+  - GetAzCliHelp
+  - WaitInMilliSeconds
 mcp_tools:
-  - isucon-mcp/*
+  - isucon-mcp_benchmark_start
+  - isucon-mcp_benchmark_status
+  - isucon-mcp_exec
 allowed_skills:
-  - mcp-tools-guide
+  - isucon-mcp-guide
 enable_skills: true

@@ -8,8 +8,8 @@ SRE Agent は **2 種類のトークン** を使い分ける。
 
 | API | resource / audience | 用途 |
 |-----|---------------------|------|
-| データプレーン | `https://azuresre.ai` | Memory, Custom Agents, Connectors, Chat |
-| ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings |
+| データプレーン | `https://azuresre.ai` | Memory, Custom Agents, Connectors, Skills, Hooks, Triggers (作成/一覧/削除) |
+| ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings, **HTTP Trigger 実行**, Thread メッセージ取得 |
 
 ```bash
 # データプレーン
@@ -653,6 +653,245 @@ az rest --method GET \
   --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors?api-version=2025-05-01-preview"
 ```
 
+## HTTP Triggers (v1)
+
+HTTP Triggers はエージェントを外部から起動するための Webhook エンドポイント。
+
+- 公式ドキュメント: https://sre.azure.com/docs/capabilities/http-triggers
+
+### 認証の使い分け
+
+| 操作 | トークン | 理由 |
+|------|---------|------|
+| 作成 / 一覧 / 削除 | データプレーン (`https://azuresre.ai`) | 管理操作 |
+| **実行 (execute)** | **ARM (`https://management.azure.com`)** | `Microsoft.App/agents/threads/write` 権限が必要 |
+
+### 作成
+
+```bash
+POST ${ENDPOINT}/api/v1/httptriggers/create
+Content-Type: application/json
+Authorization: Bearer ${DATAPLANE_TOKEN}
+
+{
+  "name": "start-contest",
+  "description": "ISUCON contest kick",
+  "agentPrompt": "ISUCON の競技を開始してください。制限時間は今から60分です。",
+  "agent": "isucon",
+  "agentMode": "autonomous"
+}
+```
+
+レスポンス:
+```json
+{
+  "triggerId": "18741a6b-...",
+  "triggerUrl": "https://...azuresre.ai/api/v1/httptriggers/trigger/18741a6b-...",
+  "message": "HTTP trigger created successfully"
+}
+```
+
+### 一覧
+
+```bash
+GET ${ENDPOINT}/api/v1/httptriggers
+Authorization: Bearer ${DATAPLANE_TOKEN}
+```
+
+### 実行
+
+```bash
+POST ${ENDPOINT}/api/v1/httptriggers/${TRIGGER_ID}/execute
+Content-Type: application/json
+Authorization: Bearer ${ARM_TOKEN}
+
+# ボディはオプション。JSON を渡すとエージェントのプロンプトに追加される
+{"key": "value"}
+```
+
+レスポンス (HTTP 202):
+```json
+{
+  "message": "HTTP trigger execution initiated successfully",
+  "execution": {
+    "executionTime": "2026-04-19T10:41:42Z",
+    "threadId": "4d16277b-...",
+    "success": true
+  }
+}
+```
+
+### 削除
+
+```bash
+DELETE ${ENDPOINT}/api/v1/httptriggers/${TRIGGER_ID}
+Authorization: Bearer ${DATAPLANE_TOKEN}
+```
+
+## Threads (v1)
+
+Trigger 実行やチャットで作成されたスレッドのメッセージを取得する。
+
+### メッセージ取得
+
+```bash
+GET ${ENDPOINT}/api/v1/threads/${THREAD_ID}/messages?skip=0&top=20&orderby=timestamp+desc
+Authorization: Bearer ${DATAPLANE_TOKEN}
+```
+
+レスポンスの各メッセージの構造:
+```json
+{
+  "id": "fe67165d-...",
+  "timeStamp": "2026-04-19T10:54:45Z",
+  "author": {
+    "role": "SREAgent",
+    "userId": "agent-default",
+    "displayName": "Azure SRE Agent"
+  },
+  "text": "メッセージ本文...",
+  "isComplete": false
+}
+```
+
+- `author.role` は `SREAgent` / `User` / `System`
+- `timeStamp` のキー名は camelCase (大文字 S)
+- テキストが空のメッセージはツール実行ログ等
+
+## Agent Hooks
+
+Hooks はエージェントのライフサイクルイベント (Stop, PostToolUse 等) にプロンプトやスクリプトを差し込む仕組み。
+
+- 公式ドキュメント: https://sre.azure.com/docs/capabilities/agent-hooks
+
+### 2 つの設定方法
+
+| 方法 | API | スコープ | 用途 |
+|------|-----|---------|------|
+| Global Hook | `PUT /api/v2/extendedAgent/hooks/{name}` | 全エージェント | 全体ポリシー (安全ガード等) |
+| Agent Inline Hook | `PUT /api/v2/extendedAgent/agents/{name}` の `properties.hooks` | 特定エージェント | エージェント固有の制御 |
+
+### Global Hook CRUD
+
+```bash
+# 作成/更新
+PUT ${ENDPOINT}/api/v2/extendedAgent/hooks/${HOOK_NAME}
+Content-Type: application/json
+Authorization: Bearer ${DATAPLANE_TOKEN}
+
+{
+  "name": "gatekeeper",
+  "type": "GlobalHook",
+  "properties": {
+    "eventType": "Stop",
+    "activationMode": "always",
+    "description": "Prevents agent from stopping during contest",
+    "hook": {
+      "type": "prompt",
+      "timeout": 30,
+      "failMode": "allow",
+      "prompt": "Check if the contest has ended.\n$ARGUMENTS\n...",
+      "model": "ReasoningFast",
+      "maxRejections": 3
+    }
+  }
+}
+
+# 一覧
+GET ${ENDPOINT}/api/v2/extendedAgent/hooks
+
+# 取得
+GET ${ENDPOINT}/api/v2/extendedAgent/hooks/${HOOK_NAME}
+
+# 削除
+DELETE ${ENDPOINT}/api/v2/extendedAgent/hooks/${HOOK_NAME}
+```
+
+### Agent Inline Hooks (v2 JSON)
+
+エージェント作成/更新時に `properties.hooks` に埋め込む:
+
+```bash
+PUT ${ENDPOINT}/api/v2/extendedAgent/agents/${AGENT_NAME}
+Content-Type: application/json
+
+{
+  "name": "my-agent",
+  "type": "ExtendedAgent",
+  "properties": {
+    "instructions": "...(50文字以上必須)...",
+    "hooks": {
+      "Stop": [{
+        "type": "prompt",
+        "prompt": "...",
+        "timeout": 30,
+        "model": "ReasoningFast",
+        "maxRejections": 3
+      }],
+      "PostToolUse": [{
+        "type": "command",
+        "matcher": "Bash|ExecuteShellCommand",
+        "timeout": 30,
+        "failMode": "block",
+        "script": "#!/usr/bin/env python3\n..."
+      }]
+    }
+  }
+}
+```
+
+### Agent Inline Hooks (Apply API — YAML)
+
+`kind: AgentConfiguration` で YAML をそのまま送ることも可能:
+
+```bash
+PUT ${ENDPOINT}/api/v1/extendedAgent/apply
+Content-Type: text/yaml
+
+api_version: azuresre.ai/v1
+kind: AgentConfiguration
+spec:
+  name: my-agent
+  system_prompt: |
+    (50文字以上必須。短いと 500 Internal Server Error になる)
+  agent_type: Autonomous
+  enable_skills: true
+  hooks:
+    Stop:
+      - type: prompt
+        prompt: |
+          Check if the task is complete.
+          $ARGUMENTS
+          Respond with {"ok": true} or {"ok": false, "reason": "..."}
+        model: ReasoningFast
+        timeout: 30
+        failMode: allow
+        maxRejections: 3
+```
+
+> **注意**: Apply API は `kind: AgentConfiguration` と `kind: ToolList` のみサポート。`kind: ExtendedAgent` は `400 Unsupported kind` になる。
+
+### Hook イベントタイプ
+
+| eventType | タイミング |
+|-----------|----------|
+| `Stop` | エージェントが応答を終了しようとする時 |
+| `PostToolUse` | ツール実行後 (`matcher` でツール名フィルタ可) |
+
+### Hook タイプ
+
+| type | 説明 |
+|------|------|
+| `prompt` | LLM にプロンプトを送って判定。`model`: `ReasoningFast` / `ReasoningHeavy` |
+| `command` | Python スクリプトを実行して判定。stdin に JSON コンテキスト、stdout に `{"ok": true}` or `{"decision": "block"}` |
+
+### 注意事項
+
+- ポータルの YAML タブに表示される形式 (`api_version: azuresre.ai/v1`, `kind: AgentConfiguration`) は Apply API 用のフォーマット
+- `system_prompt` が 50 文字未満だと Apply API で 500 エラー (バリデーションではなくサーバーエラー)
+- ポータルは空の `system_prompt` に長い CRITICAL WARNING コメントを自動挿入して 50 文字要件を回避している
+- v2 JSON API (`PUT /api/v2/extendedAgent/agents/`) ではこの制限はない（50文字チェックはある）
+
 ## Bicep リソース定義
 
 ```bicep
@@ -694,6 +933,8 @@ resource sreAgent 'Microsoft.App/agents@2025-05-01-preview' = {
   - [MCP Connector 設定](https://learn.microsoft.com/en-us/azure/sre-agent/mcp-connector)
   - [Deep Context](https://learn.microsoft.com/en-us/azure/sre-agent/workspace-tools)
   - [Agent Hooks](https://learn.microsoft.com/en-us/azure/sre-agent/agent-hooks)
+  - [HTTP Triggers](https://sre.azure.com/docs/capabilities/http-triggers)
+  - [Scheduled Tasks](https://sre.azure.com/docs/capabilities/scheduled-tasks)
 - [SRE Agent ポータル](https://sre.azure.com)
 
 ### コミュニティ
