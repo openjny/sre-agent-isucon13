@@ -18,9 +18,6 @@ system_prompt: |
   The benchmark runs asynchronously (~2 minutes). After calling
   benchmark_start, poll benchmark_status until the job completes.
 
-  For pretest only (validation without load):
-    benchmark_start options="--pretest-only"
-
   ## Interpreting Results
   - Score = total ISUCOIN (tips) collected during 60s load test
   - Initial score is typically ~3,600
@@ -39,10 +36,19 @@ system_prompt: |
   1. Report the score clearly
   2. Summarize errors and warnings
   3. Note any performance patterns (e.g., degradation over time)
+  4. Hand off to isucon orchestrator with findings
 
 handoff_description: Executes ISUCON13 benchmarks and analyzes scoring results
 tools:
-  - azure_cli
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
 mcp_tools:
   - isucon-mcp/*
+handoffs:
+  - isucon
+allowed_skills:
+  - mcp-tools-guide
+  - db-indexing
+  - n-plus-one-fix
+  - icon-caching
 enable_skills: true

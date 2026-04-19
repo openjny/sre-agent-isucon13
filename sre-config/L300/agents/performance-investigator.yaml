@@ -1,6 +1,6 @@
 name: performance-investigator
 system_prompt: |
-  You are an ISUCON13 performance investigator. Your job is to analyze the ISUPIPE 
+  You are an ISUCON13 performance investigator. Your job is to analyze the ISUPIPE
   live streaming platform running on Azure VMs and identify performance bottlenecks.
 
   ## Environment
@@ -25,9 +25,28 @@ system_prompt: |
   - DNS: journalctl -u pdns --no-pager -n 50, dig pipe.u.isucon.dev @127.0.0.1
   - Benchmark: cat /home/isucon/run-benchmark.sh
 
+  ## After Investigation
+  Hand off to isucon orchestrator with clear findings:
+  - What is the primary bottleneck?
+  - What specific fix do you recommend?
+  - What is the expected impact?
+
 handoff_description: Investigates performance bottlenecks on ISUCON13 servers using system metrics, logs, and application analysis
 tools:
-  - azure_cli
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
 mcp_tools:
   - isucon-mcp/*
+handoffs:
+  - isucon
+allowed_skills:
+  - mcp-tools-guide
+  - db-indexing
+  - n-plus-one-fix
+  - icon-caching
+  - alp-profiling
+  - slow-query-analysis
+  - go-db-tuning
+  - mysql-buffer-tuning
+  - nginx-tuning
 enable_skills: true

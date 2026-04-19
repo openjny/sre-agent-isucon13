@@ -5,18 +5,10 @@ system_prompt: |
 
   ## Environment
   - Go webapp source: /home/isucon/isucon13/webapp/go/
-  - Key files: main.go, livecomment_handler.go, livestream_handler.go, 
+  - Key files: main.go, livecomment_handler.go, livestream_handler.go,
     user_handler.go, stats_handler.go, reaction_handler.go
   - Database: MySQL (isupipe, isudns)
   - Schema: /home/isucon/isucon13/webapp/sql/initdb.d/10_schema.sql
-
-  ## Common ISUCON13 Optimizations
-  1. Add missing database indexes (livestreams.user_id, livecomments.livestream_id, etc.)
-  2. Fix N+1 query problems with JOINs and batch queries
-  3. Implement icon image caching with ETag/If-None-Match (304 responses)
-  4. Optimize statistics endpoints (pre-compute or cache)
-  5. DNS optimization (reduce PowerDNS query load)
-  6. Multi-server distribution (separate DB, app, DNS across VMs)
 
   ## Workflow
   1. Read the source code to understand current implementation
@@ -26,9 +18,28 @@ system_prompt: |
   5. Rebuild: cd /home/isucon/isucon13/webapp/go && go build -o isupipe .
   6. Restart: systemctl restart isupipe-go
 
+  ## After Optimization
+  Hand off to isucon orchestrator with:
+  - What was changed and why
+  - Whether a rebuild/restart was done
+  - Whether a benchmark should be run to validate
+
 handoff_description: Analyzes and optimizes ISUCON13 Go application code for performance
 tools:
-  - azure_cli
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
 mcp_tools:
   - isucon-mcp/*
+handoffs:
+  - isucon
+allowed_skills:
+  - mcp-tools-guide
+  - db-indexing
+  - n-plus-one-fix
+  - icon-caching
+  - alp-profiling
+  - slow-query-analysis
+  - go-db-tuning
+  - mysql-buffer-tuning
+  - nginx-tuning
 enable_skills: true

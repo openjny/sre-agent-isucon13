@@ -8,7 +8,7 @@ SRE Agent は **2 種類のトークン** を使い分ける。
 
 | API | resource / audience | 用途 |
 |-----|---------------------|------|
-| データプレーン | `https://azuresre.ai` | KB, Custom Agents, Connectors, Chat |
+| データプレーン | `https://azuresre.ai` | Memory, Custom Agents, Connectors, Chat |
 | ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings |
 
 ```bash
@@ -45,20 +45,157 @@ AGENT_ENDPOINT=$(az resource show -g "$RG" -n "$AGENT_NAME" \
 
 ## データプレーン API
 
-### Knowledge Base
+### Agent Memory (v1)
+
+エージェントのインデックスにドキュメントを直接追加する v1 API。
+v2 では Knowledge Sources (connectors) に統合されたが、v1 の方が確実にインデックスされる。
 
 ```bash
-# アップロード
+# アップロード (multipart)
 curl -X POST "$AGENT_ENDPOINT/api/v1/AgentMemory/upload" \
   -H "Authorization: Bearer $TOKEN" \
   -F "triggerIndexing=true" \
   -F "files=@file1.md;type=text/plain" \
   -F "files=@file2.md;type=text/plain"
 
-# ファイル一覧
+# ファイル一覧（インデックス状態付き）
 curl "$AGENT_ENDPOINT/api/v1/AgentMemory/files" \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+レスポンス例:
+
+```json
+{
+  "files": [
+    {"name": "runbook.md", "isIndexed": true, "errorReason": null},
+    {"name": "knowledge_my-file.bin", "isIndexed": false, "errorReason": "File could not be indexed..."}
+  ],
+  "continuationToken": ""
+}
+```
+
+> **Note**: この API は Agent Memory upload で追加したファイルだけでなく、Knowledge Sources (v2 connectors) で追加されたファイルも `knowledge_` prefix 付きで統合表示する。`isIndexed` はインデクシング完了状態を示し、Knowledge File/WebPage のインデクシング状態を確認できる唯一のエンドポイント。
+>
+> **既知の問題と対処**: Knowledge File API で `fileName` と `contentType` を extendedProperties に指定しないと、ファイルが `.bin` 拡張子で保存されインデクサーが解釈できずエラーになる。`srectl knowledge file add` では自動的にファイル名から `contentType` を推定して付与する。
+
+### Memory vs Knowledge の関係
+
+| 概念 | API バージョン | エンドポイント | 用途 |
+|------|-------------|--------------|------|
+| **Memory** | v1 | `POST /api/v1/AgentMemory/upload` | ファイルを直接インデックスに追加（確実） |
+| **Knowledge File** | v2 | `PUT /api/v2/extendedAgent/connectors/{name}` (KnowledgeFile) | ファイルをコネクタとして管理 |
+| **Knowledge WebPage** | v2 | `PUT /api/v2/extendedAgent/connectors/{name}` (KnowledgeWebPage) | Web ページをクロール・インデックス |
+| **Knowledge Repo** | v2 | `PUT /api/v2/repos/{name}` | GitHub リポジトリのコード・ドキュメント |
+
+v2 では全外部リソースが「コネクタ」として統一管理される設計。v1 AgentMemory はレガシーだが、ファイルのインデクシングにおいては最も信頼性が高い。
+
+`GET /api/v1/AgentMemory/files` は全ソースの統合ビュー:
+
+| `name` のパターン | ソース |
+|-------------------|--------|
+| `filename.md` | v1 AgentMemory upload |
+| `knowledge_xxx.bin` | v2 Knowledge File connector |
+| `knowledge_xxx.html` | v2 Knowledge WebPage connector |
+
+### Knowledge Sources (v2)
+
+ユーザーが登録するナレッジソース。ファイル・Webページ・GitHub リポジトリの3種類。
+Agent Memory（エージェントが会話から自動学習する知見）とは別概念。
+
+#### Knowledge File
+
+```bash
+# ファイル追加 (PUT) — connectors API 経由、Base64 エンコードで送信
+curl -X PUT "$AGENT_ENDPOINT/api/v2/extendedAgent/connectors/{name}" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-runbook",
+    "type": "KnowledgeItem",
+    "properties": {
+      "dataConnectorType": "KnowledgeFile",
+      "dataSource": "my-runbook",
+      "extendedProperties": {
+        "displayName": "My Runbook",
+        "fileContent": "<base64-encoded-content>"
+      }
+    }
+  }'
+
+# 取得
+curl "$AGENT_ENDPOINT/api/v2/extendedAgent/connectors/{name}" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 削除
+curl -X DELETE "$AGENT_ENDPOINT/api/v2/extendedAgent/connectors/{name}" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+#### Knowledge Web Page
+
+```bash
+curl -X PUT "$AGENT_ENDPOINT/api/v2/extendedAgent/connectors/{name}" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-docs",
+    "type": "KnowledgeItem",
+    "properties": {
+      "dataConnectorType": "KnowledgeWebPage",
+      "dataSource": "my-docs",
+      "extendedProperties": {
+        "url": "https://example.com/docs",
+        "displayName": "My Docs",
+        "description": "External documentation page"
+      }
+    }
+  }'
+```
+
+#### Knowledge GitHub Repository
+
+GitHub リポジトリのコード・ドキュメントをナレッジとして登録。事前に PAT の設定が必要。
+
+```bash
+# 1. GitHub PAT 登録
+curl -X POST "$AGENT_ENDPOINT/api/v1/github/auth/pat" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "pat=github_pat_xxxxx"
+
+# 2. リポジトリ一覧取得 (optional)
+curl "$AGENT_ENDPOINT/api/v1/github/repos" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 3. リポジトリ追加
+curl -X PUT "$AGENT_ENDPOINT/api/v2/repos/{repo-name}" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "repo-name",
+    "type": "CodeRepo",
+    "properties": {
+      "url": "https://github.com/owner/repo",
+      "type": "GitHub",
+      "description": "Repository description"
+    }
+  }'
+
+# 4. 登録リポジトリ一覧 (sync 状態確認)
+curl "$AGENT_ENDPOINT/api/v2/repos" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 5. リポジトリ削除
+curl -X DELETE "$AGENT_ENDPOINT/api/v2/repos/{repo-name}" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 6. PAT 削除
+curl -X DELETE "$AGENT_ENDPOINT/api/v1/github/auth" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+> **Note**: Knowledge Sources はバックエンドで AI Search 相当のインデクシングが行われる。追加後に同期完了までラグがある。`GET /api/v2/repos` で sync 状態を確認可能。
 
 ### Custom Agents
 
@@ -93,6 +230,43 @@ curl "$AGENT_ENDPOINT/api/v2/extendedAgent/agents" \
 ```
 
 HTTP 202 は非同期処理の受理（成功）。
+
+### Skills
+
+```bash
+# 作成・更新 (PUT)
+curl -X PUT "$AGENT_ENDPOINT/api/v2/extendedAgent/skills/{skill-name}" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "skill-name",
+    "type": "Skill",
+    "properties": {
+      "description": "When to use this skill",
+      "tools": [],
+      "skillContent": "---\nname: skill-name\ndescription: When to use this skill\n---\n\n# Skill Instructions\n\nStep-by-step guidance here...",
+      "additionalFiles": [
+        {"filePath": "/references/guide.md", "content": "Reference content here"}
+      ]
+    }
+  }'
+
+# 一覧 (GET)
+curl "$AGENT_ENDPOINT/api/v2/extendedAgent/skills" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 個別取得 (GET)
+curl "$AGENT_ENDPOINT/api/v2/extendedAgent/skills/{skill-name}" \
+  -H "Authorization: Bearer $TOKEN"
+
+# 削除 (DELETE)
+curl -X DELETE "$AGENT_ENDPOINT/api/v2/extendedAgent/skills/{skill-name}" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+> **Note**: `skillContent` は YAML frontmatter 付き Markdown。frontmatter に `name`, `description`, `tools` を記載する。`additionalFiles` で参照ドキュメントを添付可能（`SKILL.md` から相対パスでリンク）。
+>
+> エージェントに skill を紐付けるには、エージェント定義の `allowedSkills` に skill 名を列挙する。`enableSkills: true` も必要。
 
 ### Connectors
 
@@ -267,6 +441,192 @@ curl -X PUT "$AGENT_ENDPOINT/api/v2/repos/{repo-name}" \
     }
   }'
 ```
+
+### Tools 一覧
+
+エージェントが利用可能な全ツール（組み込み + MCP + カスタム）を取得する。
+
+```bash
+# ツール一覧 (GET)
+curl "$AGENT_ENDPOINT/api/v2/agent/tools" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+レスポンス構造:
+
+```json
+{
+  "data": [
+    {
+      "name": "RunAzCliReadCommands",
+      "source": "system",
+      "mcpConnector": null,
+      "mcpConnectorDisplayName": null,
+      "defaultMode": "enabled",
+      "enabled": true,
+      "category": "Azure Operation",
+      "schema": { ... },
+      "description": "Executes read-only Azure CLI commands..."
+    },
+    {
+      "name": "ssh-mcp_exec",
+      "source": "mcp",
+      "mcpConnector": "ssh-mcp",
+      "mcpConnectorDisplayName": "SSH MCP",
+      "defaultMode": "disabled",
+      "enabled": false,
+      "category": null,
+      "schema": { ... },
+      "description": "Execute a shell command on a remote host..."
+    }
+  ]
+}
+```
+
+| フィールド | 説明 |
+|-----------|------|
+| `name` | ツール名。MCP ツールは `{connector}_{tool}` 形式 |
+| `source` | `system` (組み込み) または `mcp` (MCP コネクタ経由) |
+| `mcpConnector` | MCP ツールの場合、コネクタ名 |
+| `defaultMode` | `always` (常時有効), `enabled` (有効), `disabled` (無効) |
+| `enabled` | 現在の有効/無効状態 |
+| `category` | カテゴリ分類 (下記参照) |
+| `schema` | JSON Schema (パラメータ定義) |
+
+カテゴリ一覧 (2025-05 時点):
+
+| カテゴリ | ツール数 | 主なツール |
+|---------|---------|-----------|
+| Azure Operation | 2 | RunAzCliReadCommands, RunAzCliWriteCommands |
+| DevOps | 18 | CreateGithubIssue, FetchGithubIssues, etc. |
+| Knowledge Base | 4 | SearchMemory, SearchIncidentKnowledge, UploadKnowledgeDocument |
+| Log Query | 4 | QueryAppInsightsByAppId, QueryLogAnalyticsByWorkspaceId, etc. |
+| System | 1 | AskUserQuestion |
+| Utility | 2 | ExecutePythonCode, UploadFileToSession |
+| Visualization | 5 | PlotBarChart, PlotHeatmap, PlotPieChart, PlotScatter, PlotAreaChart |
+| Workspace Operation | 12 | ReadFile, CreateFile, RunInTerminal, GrepSearch, etc. |
+| (uncategorized) | 10 | Scheduled task 管理, Task (sub-agent delegation), read_skill_file |
+
+> **Note**: `defaultMode` が `disabled` のツールは Experimental Settings を有効化すると使えるようになるものがある。MCP ツールは `source: "mcp"` で表示され、コネクタ作成後に反映される。
+
+### Apply (宣言的リソース作成)
+
+複数リソースを宣言的に作成・更新する汎用エンドポイント。
+
+> **重要**: `Content-Type: text/yaml` が必須（`application/json` は 415 になる）。Body は YAML でも JSON でも可（YAML パーサーが JSON も解釈する）。
+
+```bash
+# 宣言的 apply (PUT)
+curl -X PUT "$AGENT_ENDPOINT/api/v1/extendedAgent/apply" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "api_version": "azuresre.ai/v1",
+    "kind": "ToolList",
+    "spec": {
+      "tools": [
+        {
+          "name": "my-python-tool",
+          "type": "PythonFunctionTool",
+          "description": "Tool description here",
+          "function_code": "def main() -> dict:\n    return {\"result\": \"Hello\"}",
+          "timeout_seconds": 120,
+          "parameters": []
+        }
+      ]
+    }
+  }'
+```
+
+#### Python ツール作成
+
+カスタム Python ツールを作成してエージェントに利用させることができる。
+
+```bash
+# srectl で作成
+python3 scripts/srectl.py tool create \
+  --name my-tool \
+  --description "My custom tool" \
+  --code-file tools/my_tool.py \
+  --timeout 120
+
+# 削除
+python3 scripts/srectl.py tool delete my-tool
+```
+
+**API エンドポイント:**
+
+```bash
+# カスタムツール削除
+curl -X DELETE "$AGENT_ENDPOINT/api/v1/extendedAgent/tools/{tool-name}" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Python ツールの要件:**
+- `main()` 関数を定義し、`dict` を返す
+- パラメータを受け取る場合は `parameters` で JSON Schema 定義
+- `timeout_seconds` でタイムアウトを設定（デフォルト 120秒）
+- インターネットアクセス可能（Jupyter-style 環境で実行）
+
+**パラメータ付きの例:**
+
+```json
+{
+  "name": "query-tool",
+  "type": "PythonFunctionTool",
+  "description": "Execute a custom query",
+  "function_code": "def main(query: str, limit: int = 10) -> dict:\n    return {\"query\": query, \"limit\": limit}",
+  "timeout_seconds": 60,
+  "parameters": [
+    {"name": "query", "type": "string", "description": "The query to execute", "required": true},
+    {"name": "limit", "type": "integer", "description": "Max results", "required": false}
+  ]
+}
+```
+
+#### Apply の kind 一覧
+
+| api_version | kind | 用途 |
+|-------------|------|------|
+| `azuresre.ai/v1` | `ToolList` | カスタムツール作成（PythonFunctionTool 等） |
+| `azuresre.ai/v2` | `ExtendedAgentTool` | 個別ツール定義（KustoTool 等） |
+
+カスタムツールの type:
+
+| type | 用途 | 備考 |
+|------|------|------|
+| `PythonFunctionTool` | カスタム Python 関数 | `main()` 関数を定義、pip 依存可 |
+| `KustoTool` | KQL クエリ実行 | mode: Query/Function/Script、`##param##` で置換 |
+| Link | URL テンプレート | ポータル UI で作成 |
+| HTTP client | REST API 呼び出し | ポータル UI で作成 |
+
+#### Kusto ツール定義 (YAML)
+
+```yaml
+api_version: azuresre.ai/v2
+kind: ExtendedAgentTool
+metadata:
+  name: query-app-logs
+spec:
+  type: KustoTool
+  connector: my-adx-connector
+  mode: Query
+  database: mydb
+  description: "Query AppLogs for errors in a time range"
+  toolMode: Auto
+  query: |-
+    AppLogs
+    | where TimeGenerated > ago(##timeRange##)
+    | where Level == "Error"
+    | project TimeGenerated, Message
+    | take 100
+  parameters:
+    - name: timeRange
+      type: string
+      description: "How far back to look (e.g., 1h, 24h)"
+```
+
+> **Note**: Apply API は `azuresre.ai/v1` と `azuresre.ai/v2` の2つの API バージョンが確認されている。Link / HTTP client ツールの宣言的作成方法は未検証。
 
 ## ARM API
 

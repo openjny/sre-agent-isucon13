@@ -56,13 +56,21 @@ CERT_DIR="/etc/nginx/tls"
 mkdir -p "$CERT_DIR"
 if [[ -n "${KEY_VAULT_NAME:-}" ]]; then
   echo "Fetching TLS certificate from Key Vault: $KEY_VAULT_NAME"
-  # Get access token using VM's Managed Identity
-  TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
   KV_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
-  # Fetch cert and key from Key Vault
-  curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.crt"
-  curl -s "${KV_URL}/secrets/tls-key?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.key"
-  chmod 600 "$CERT_DIR/_.u.isucon.dev.key"
+  # Retry loop: RBAC propagation can take up to a few minutes
+  for attempt in $(seq 1 12); do
+    TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
+    CERT_VAL=$(curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value // empty')
+    if [[ -n "$CERT_VAL" ]]; then
+      echo "$CERT_VAL" > "$CERT_DIR/_.u.isucon.dev.crt"
+      curl -s "${KV_URL}/secrets/tls-key?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.key"
+      chmod 600 "$CERT_DIR/_.u.isucon.dev.key"
+      echo "TLS certificate fetched successfully (attempt $attempt)"
+      break
+    fi
+    echo "KV access not ready yet (attempt $attempt/12), waiting 15s..."
+    sleep 15
+  done
 elif [[ -d "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls" ]]; then
   echo "Falling back to TLS certs from isucon13 repo"
   cp "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls/"* "$CERT_DIR/"

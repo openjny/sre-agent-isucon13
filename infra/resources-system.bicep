@@ -158,31 +158,6 @@ module aca 'modules/aca.bicep' = {
 // Monitoring (optional)
 // ============================================================
 
-// ── Key Vault access for VMs (to retrieve TLS cert during provisioning) ─────
-var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
-
-resource kvVmRoleContest 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for i in range(0, 3): {
-    name: guid(keyVault.id, contestVms[i].outputs.vmPrincipalId, kvSecretsUserRoleId)
-    scope: keyVault
-    properties: {
-      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
-      principalId: contestVms[i].outputs.vmPrincipalId
-      principalType: 'ServicePrincipal'
-    }
-  }
-]
-
-resource kvVmRoleBench 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, benchVm.outputs.vmPrincipalId, kvSecretsUserRoleId)
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
-    principalId: benchVm.outputs.vmPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
 var allVmNames = [
   contestVms[0].outputs.vmName
   contestVms[1].outputs.vmName

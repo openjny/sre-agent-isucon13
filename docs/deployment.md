@@ -29,7 +29,7 @@ azd up
 `azd up` が以下を自動実行します:
 - Bicep によるインフラプロビジョニング (VM, SRE Agent, ACA 等)
 - ISUCON MCP Server の ACA へのデプロイ
-- SRE Agent 構成 (KB, MCP Connector, Custom Agents, Experimental Tools)
+- SRE Agent 構成 (Memory, MCP Connector, Custom Agents, Experimental Tools)
 
 手動で SRE Agent 構成だけ再実行したい場合:
 
@@ -63,7 +63,12 @@ chmod 600 /tmp/key
 ## VS Code MCP 接続
 
 `.vscode/mcp.json` が含まれているため、VS Code で開くと ISUCON MCP Server に接続可能です。
-初回接続時に API Key の入力を求められます（`azd env get-value MCP_API_KEY` で取得）。
+初回接続時に Endpoint URL と API Key の入力を求められます:
+
+```bash
+azd env get-value ISUCON_MCP_FQDN      # MCP Server FQDN
+azd env get-value ISUCON_MCP_API_KEY   # API Key
+```
 
 ## クリーンアップ
 

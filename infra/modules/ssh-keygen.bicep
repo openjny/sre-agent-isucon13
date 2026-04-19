@@ -69,6 +69,9 @@ resource sshKeyGen 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
       #!/bin/bash
       set -euo pipefail
 
+      # Install openssl (not included in AzureCLI deployment script image)
+      apk add --no-cache openssl openssh-keygen 2>/dev/null || apt-get update -qq && apt-get install -y -qq openssl openssh-client 2>/dev/null || true
+
       # ── SSH Key ──────────────────────────────────────────────
       # Check if key already exists in Key Vault
       EXISTING=$(az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name "$SECRET_NAME" --query "value" -o tsv 2>/dev/null || echo "")

@@ -118,6 +118,26 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
 }
 
 // ============================================================
+// Key Vault RBAC — grant VM identity Secrets User before CSE runs
+// ============================================================
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+
+resource kvVmRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, vm.id, kvSecretsUserRoleId)
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
+    principalId: vm.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ============================================================
 // Custom Script Extension — bootstrap ISUCON13 environment
 // ============================================================
 
@@ -156,6 +176,7 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2024-03-01' = {
       script: base64('${scriptContent}${bootstrapArgs}')
     }
   }
+  dependsOn: [kvVmRole]
 }
 
 // ============================================================
