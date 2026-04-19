@@ -28,6 +28,9 @@ SRE Agent の構成を4段階で制御できる。
 
 ```bash
 # セットアップ（トリガー作成 + キックまで自動実行）
+bash scripts/sreagent-setup.sh L200 --trigger
+
+# セットアップのみ（キックなし）
 bash scripts/sreagent-setup.sh L200
 
 # 全構成を削除してやり直す場合

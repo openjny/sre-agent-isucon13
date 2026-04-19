@@ -23,8 +23,20 @@ else
   SRECTL="srectl"
 fi
 
-# Tier from argument or azd env
-AGENT_TIER="${1:-$(azd env get-value AGENT_TIER 2>/dev/null || echo "L100")}"
+# Parse arguments
+AGENT_TIER=""
+ENABLE_TRIGGER=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --trigger) ENABLE_TRIGGER=true; shift ;;
+    L[1-4]00) AGENT_TIER="$1"; shift ;;
+    *) echo "❌ Unknown argument: $1"; exit 1 ;;
+  esac
+done
+
+# Fallback tier
+AGENT_TIER="${AGENT_TIER:-$(azd env get-value AGENT_TIER 2>/dev/null || echo "L100")}"
 
 # Validate tier
 valid=false
@@ -142,27 +154,29 @@ az rest --method PATCH \
 echo ""
 
 # ── Contest trigger + kick ───────────────────────────────────────────────────
-echo "🚀 Creating and executing contest trigger..."
-CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から60分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
+if $ENABLE_TRIGGER; then
+  echo "🚀 Creating and executing contest trigger..."
+  CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から60分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
 
-TRIGGER_OUTPUT=$($SRECTL trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>&1)
-echo "$TRIGGER_OUTPUT"
-TRIGGER_ID=$(echo "$TRIGGER_OUTPUT" | grep "Trigger ID:" | awk '{print $NF}')
-if [ -n "$TRIGGER_ID" ]; then
-  azd env set TRIGGER_ID "$TRIGGER_ID" 2>/dev/null
-  echo "   Saved TRIGGER_ID=$TRIGGER_ID"
+  TRIGGER_OUTPUT=$($SRECTL trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>&1)
+  echo "$TRIGGER_OUTPUT"
+  TRIGGER_ID=$(echo "$TRIGGER_OUTPUT" | grep "Trigger ID:" | awk '{print $NF}')
+  if [ -n "$TRIGGER_ID" ]; then
+    azd env set TRIGGER_ID "$TRIGGER_ID" 2>/dev/null
+    echo "   Saved TRIGGER_ID=$TRIGGER_ID"
 
-  EXEC_OUTPUT=$($SRECTL trigger execute "$TRIGGER_ID" 2>&1)
-  echo "$EXEC_OUTPUT"
-  THREAD_ID=$(echo "$EXEC_OUTPUT" | grep "Thread ID:" | awk '{print $NF}')
-  if [ -n "$THREAD_ID" ]; then
-    azd env set THREAD_ID "$THREAD_ID" 2>/dev/null
-    echo "   Saved THREAD_ID=$THREAD_ID"
+    EXEC_OUTPUT=$($SRECTL trigger execute "$TRIGGER_ID" 2>&1)
+    echo "$EXEC_OUTPUT"
+    THREAD_ID=$(echo "$EXEC_OUTPUT" | grep "Thread ID:" | awk '{print $NF}')
+    if [ -n "$THREAD_ID" ]; then
+      azd env set THREAD_ID "$THREAD_ID" 2>/dev/null
+      echo "   Saved THREAD_ID=$THREAD_ID"
+    fi
+  else
+    echo "   ⚠️  Could not create trigger"
   fi
-else
-  echo "   ⚠️  Could not create trigger"
+  echo ""
 fi
-echo ""
 
 # ── Status ───────────────────────────────────────────────────────────────────
 echo "============================================="
