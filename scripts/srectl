@@ -1,0 +1,26 @@
+#!/bin/bash
+# =============================================================================
+# scripts/srectl — Wrapper for srectl CLI
+#
+# Ensures venv exists and runs srectl directly (no uv run overhead).
+# Usage: scripts/srectl <command> [args...]
+# =============================================================================
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SRECTL_BIN="$ROOT_DIR/srectl/.venv/bin/srectl"
+
+if [ ! -x "$SRECTL_BIN" ]; then
+  if command -v uv &>/dev/null; then
+    uv sync --project "$ROOT_DIR/srectl" --quiet 2>/dev/null
+  else
+    echo "❌ uv not found. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+    exit 1
+  fi
+fi
+
+if [ ! -x "$SRECTL_BIN" ]; then
+  echo "❌ srectl not found at $SRECTL_BIN after sync" >&2
+  exit 1
+fi
+
+exec "$SRECTL_BIN" "$@"

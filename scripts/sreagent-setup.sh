@@ -12,16 +12,8 @@ set -uo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$SCRIPT_DIR/lib/sreagent-common.sh"
 ALL_TIERS=(L100 L200 L300 L400)
-
-# Resolve srectl CLI
-if command -v uv &>/dev/null; then
-  SRECTL="uv run --project $ROOT_DIR/srectl srectl"
-else
-  pip install -q -e "$ROOT_DIR/srectl" 2>/dev/null
-  SRECTL="srectl"
-fi
 
 # Parse arguments
 AGENT_TIER=""
@@ -46,10 +38,6 @@ fi
 
 # Save to azd env
 azd env set AGENT_TIER "$AGENT_TIER" 2>/dev/null
-
-# ── Pre-resolve endpoint + token (cache for all srectl invocations) ──────────
-export SRE_AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
-export SRE_AGENT_TOKEN=$(az account get-access-token --resource https://azuresre.ai --query accessToken -o tsv 2>/dev/null || echo "")
 
 echo ""
 echo "============================================="
@@ -113,23 +101,9 @@ echo ""
 
 # ── Agents (two-pass for circular handoffs) ──────────────────────────────────
 echo "🤖 Creating agents (${AGENT_TIER}) — pass 1: stubs..."
-VENV_PYTHON="$ROOT_DIR/srectl/.venv/bin/python3"
 for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
-  tmp_yaml=$(mktemp)
-  "$VENV_PYTHON" -c "
-import yaml, sys
-with open(sys.argv[1]) as f:
-    spec = yaml.safe_load(f)
-if spec and 'spec' in spec and 'handoffs' in spec.get('spec', {}):
-    spec['spec']['handoffs'] = []
-elif spec and 'handoffs' in spec:
-    spec['handoffs'] = []
-with open(sys.argv[2], 'w') as f:
-    yaml.dump(spec, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-" "$yaml_file" "$tmp_yaml"
-  $SRECTL agent apply -f "$tmp_yaml" || true
-  rm -f "$tmp_yaml"
+  $SRECTL agent apply -f "$yaml_file" --strip-handoffs || true
 done
 
 echo "🤖 Creating agents (${AGENT_TIER}) — pass 2: with handoffs..."

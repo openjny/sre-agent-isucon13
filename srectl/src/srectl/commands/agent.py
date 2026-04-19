@@ -55,6 +55,8 @@ def cmd_agent_apply(args: argparse.Namespace) -> None:
     name = body.get("name", "")
     if not name:
         die("Agent YAML must have a name (metadata.name or top-level name)")
+    if getattr(args, "strip_handoffs", False):
+        body.get("properties", {})["handoffs"] = []
     code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/agents/{name}", body=body)
     if code in (200, 201, 202, 204):
         ok(f"agent/{name}")

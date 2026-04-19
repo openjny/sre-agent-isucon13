@@ -12,22 +12,7 @@ set -uo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Resolve srectl CLI
-if command -v uv &>/dev/null; then
-  SRECTL="uv run --project $ROOT_DIR/srectl srectl"
-else
-  SRECTL="srectl"
-fi
-
-# Pre-resolve endpoint + token
-if [ -z "${SRE_AGENT_ENDPOINT:-}" ]; then
-  export SRE_AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
-fi
-if [ -z "${SRE_AGENT_TOKEN:-}" ]; then
-  export SRE_AGENT_TOKEN=$(az account get-access-token --resource https://azuresre.ai --query accessToken -o tsv 2>/dev/null || echo "")
-fi
+source "$SCRIPT_DIR/lib/sreagent-common.sh"
 
 # Parse arguments
 ENABLE_WATCH=false
@@ -61,15 +46,14 @@ if [ -n "$TRIGGER_ID" ]; then
 else
   echo "🚀 Creating contest trigger..."
   CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から60分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
-  TRIGGER_OUTPUT=$($SRECTL trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>&1)
-  echo "$TRIGGER_OUTPUT"
-  TRIGGER_ID=$(echo "$TRIGGER_OUTPUT" | grep "Trigger ID:" | awk '{print $NF}')
+  TRIGGER_ID=$($SRECTL -o json trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('triggerId',''))" 2>/dev/null)
   if [ -z "$TRIGGER_ID" ]; then
     echo "❌ Could not create trigger"
     exit 1
   fi
   azd env set TRIGGER_ID "$TRIGGER_ID" 2>/dev/null
-  echo "   Saved TRIGGER_ID=$TRIGGER_ID"
+  echo "   ✅ Trigger: $TRIGGER_ID"
 fi
 
 # ── Execute trigger (if needed) ──────────────────────────────────────────────
@@ -77,15 +61,14 @@ if [ -n "$THREAD_ID" ]; then
   echo "📌 Thread already exists: $THREAD_ID"
 else
   echo "🚀 Executing trigger..."
-  EXEC_OUTPUT=$($SRECTL trigger execute "$TRIGGER_ID" 2>&1)
-  echo "$EXEC_OUTPUT"
-  THREAD_ID=$(echo "$EXEC_OUTPUT" | grep "Thread ID:" | awk '{print $NF}')
+  THREAD_ID=$($SRECTL -o json trigger execute "$TRIGGER_ID" 2>/dev/null \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('execution',d).get('threadId',''))" 2>/dev/null)
   if [ -z "$THREAD_ID" ]; then
     echo "❌ Could not execute trigger"
     exit 1
   fi
   azd env set THREAD_ID "$THREAD_ID" 2>/dev/null
-  echo "   Saved THREAD_ID=$THREAD_ID"
+  echo "   ✅ Thread:  $THREAD_ID"
 fi
 
 echo ""

@@ -10,22 +10,7 @@ set -uo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Resolve srectl CLI
-if command -v uv &>/dev/null; then
-  SRECTL="uv run --project $ROOT_DIR/srectl srectl"
-else
-  SRECTL="srectl"
-fi
-
-# Pre-resolve endpoint + token if not already cached
-if [ -z "${SRE_AGENT_ENDPOINT:-}" ]; then
-  export SRE_AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
-fi
-if [ -z "${SRE_AGENT_TOKEN:-}" ]; then
-  export SRE_AGENT_TOKEN=$(az account get-access-token --resource https://azuresre.ai --query accessToken -o tsv 2>/dev/null || echo "")
-fi
+source "$SCRIPT_DIR/lib/sreagent-common.sh"
 
 echo ""
 echo "============================================="

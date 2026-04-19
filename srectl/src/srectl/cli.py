@@ -50,6 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="srectl", description="SRE Agent CLI")
     p.add_argument("--endpoint", help="Override agent endpoint URL")
     p.add_argument("--token", help="Override bearer token")
+    p.add_argument("-o", "--output", choices=["text", "json"], default="text", help="Output format (default: text)")
 
     sub = p.add_subparsers(dest="resource", help="Resource type")
 
@@ -70,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     aa = agent_sub.add_parser("apply", help="Create/update agent from YAML")
     aa.add_argument("-f", "--file", required=True, help="Agent YAML file")
+    aa.add_argument("--strip-handoffs", action="store_true", help="Remove handoffs before applying (for two-pass creation)")
     aa.set_defaults(func=cmd_agent_apply)
 
     ad = agent_sub.add_parser("delete", help="Delete agent")

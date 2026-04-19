@@ -544,14 +544,14 @@ curl -X PUT "$AGENT_ENDPOINT/api/v1/extendedAgent/apply" \
 
 ```bash
 # srectl で作成
-python3 scripts/srectl.py tool create \
+scripts/srectl tool create \
   --name my-tool \
   --description "My custom tool" \
   --code-file tools/my_tool.py \
   --timeout 120
 
 # 削除
-python3 scripts/srectl.py tool delete my-tool
+scripts/srectl tool delete my-tool
 ```
 
 **API エンドポイント:**

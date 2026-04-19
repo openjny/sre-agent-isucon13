@@ -63,12 +63,12 @@ azd up
   │   │       └─ bench: KV から TLS cert 取得 → CA trust store 追加
   │   └─ SRE Agent (Australia East)
   ├─ Deploy: ISUCON MCP Server イメージ → ACR → ACA 更新
-  └─ Post-provision hook: post-provision.sh (srectl.py CLI 経由)
+  └─ Post-provision hook: post-provision.sh → sreagent-setup.sh
+      ├─ ツール有効化 (ARM API)
       ├─ メモリ追加 (srectl memory add)
+      ├─ MCP コネクタ (srectl mcp add)
       ├─ Skills デプロイ (srectl skill add, base + 累積 L{n}/skills/)
-      ├─ Custom Agent 作成 (srectl agent apply, L{current}/agents/)
-      ├─ ダウングレード cleanup (srectl skill/agent delete)
-      └─ Experimental tools 有効化 (ARM API)
+      └─ Custom Agent 作成 (srectl agent apply, 2パス)
 ```
 
 ## 認証

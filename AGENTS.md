@@ -45,12 +45,12 @@ bash scripts/sreagent-run.sh --watch
 個別リソースの操作には `srectl` CLI を使用:
 
 ```bash
-uv run --project srectl srectl context                                    # 接続確認
-uv run --project srectl srectl agent list                                 # エージェント一覧
-uv run --project srectl srectl agent apply -f sre-config/L100/agents/isucon.yaml  # エージェント作成
-uv run --project srectl srectl skill add --dir sre-config/base/skills/isucon-mcp-guide  # スキル作成
-uv run --project srectl srectl memory add sre-config/base/memory/*.md               # メモリ追加
-uv run --project srectl srectl tool list                                  # 利用可能ツール一覧
+scripts/srectl context                                    # 接続確認
+scripts/srectl agent list                                 # エージェント一覧
+scripts/srectl agent apply -f sre-config/L100/agents/isucon.yaml  # エージェント作成
+scripts/srectl skill add --dir sre-config/base/skills/isucon-mcp-guide  # スキル作成
+scripts/srectl memory add sre-config/base/memory/*.md               # メモリ追加
+scripts/srectl tool list                                  # 利用可能ツール一覧
 ```
 
 | Tier | Agents | Skills (累積) | 概要 |

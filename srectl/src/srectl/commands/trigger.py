@@ -28,9 +28,12 @@ def cmd_trigger_create(args: argparse.Namespace) -> None:
     code, data = api_request(endpoint, token, "POST", "/api/v1/httptriggers/create", body=body)
     if code in (200, 201, 202):
         if isinstance(data, dict):
-            print(f"Trigger ID:  {data.get('triggerId', '?')}")
-            print(f"Trigger URL: {data.get('triggerUrl', '?')}")
-            ok(f"trigger/{args.name}")
+            if getattr(args, "output", "text") == "json":
+                print_json(data)
+            else:
+                print(f"Trigger ID:  {data.get('triggerId', '?')}")
+                print(f"Trigger URL: {data.get('triggerUrl', '?')}")
+                ok(f"trigger/{args.name}")
         else:
             print_json(data)
     else:
@@ -68,9 +71,12 @@ def cmd_trigger_execute(args: argparse.Namespace) -> None:
     code, data = api_request(endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute", body=payload)
     if code in (200, 202):
         if isinstance(data, dict):
-            execution = data.get("execution", data)
-            print(f"Thread ID: {execution.get('threadId', '?')}")
-            ok("trigger executed")
+            if getattr(args, "output", "text") == "json":
+                print_json(data)
+            else:
+                execution = data.get("execution", data)
+                print(f"Thread ID: {execution.get('threadId', '?')}")
+                ok("trigger executed")
         else:
             print_json(data)
     else:
