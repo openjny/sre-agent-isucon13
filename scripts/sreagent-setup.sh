@@ -4,7 +4,7 @@ set -uo pipefail
 # =============================================================================
 # sreagent-setup.sh — Set up SRE Agent configuration for a given tier
 #
-# Configures memory, MCP connector, skills, agents, workspace tools,
+# Configures memory, MCP connector, skills, agents, tools,
 # creates a contest trigger, and kicks off the agent.
 #
 # Usage: bash scripts/sreagent-setup.sh [L100|L200|L300|L400]
@@ -84,8 +84,8 @@ if [ ${#MEMORY_FILES[@]} -gt 0 ] && [ -f "${MEMORY_FILES[0]}" ]; then
 fi
 echo ""
 
-# ── Enable workspace tools (must precede agent creation) ─────────────────────
-echo "⚙️  Enabling workspace tools..."
+# ── Enable tools (must precede agent creation) ──────────────────────────────
+echo "⚙️  Enabling tools..."
 RG_SREAGENT=$(azd env get-value SREAGENT_RESOURCE_GROUP 2>/dev/null || echo "rg-isucon13-sreagent")
 SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
 ARM_AGENT_NAME=$(az resource list -g "$RG_SREAGENT" --resource-type "Microsoft.App/agents" --query "[0].name" -o tsv 2>/dev/null || echo "")
@@ -93,7 +93,7 @@ AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_SREAGEN
 az rest --method PATCH \
   --url "https://management.azure.com${AGENT_RESOURCE_ID}?api-version=2025-05-01-preview" \
   --body '{"properties":{"experimentalSettings":{"EnableWorkspaceTools":true}}}' \
-  --output none 2>/dev/null && echo "   ✅ Workspace tools enabled" \
+  --output none 2>/dev/null && echo "   ✅ Tools enabled" \
   || echo "   ⚠️  Could not enable tools"
 echo ""
 
