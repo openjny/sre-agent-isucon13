@@ -1073,7 +1073,6 @@ def cmd_thread_watch(args: argparse.Namespace) -> None:
 
 def cmd_contest_kick(args: argparse.Namespace) -> None:
     endpoint, token = _get_ctx(args)
-    arm_token = get_arm_token()
 
     time_limit = args.time_limit
     prompt = args.prompt or f"ISUCON の競技を開始してください。制限時間は今から{time_limit}分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
@@ -1100,7 +1099,7 @@ def cmd_contest_kick(args: argparse.Namespace) -> None:
 
     # Step 2: Execute trigger
     print("Executing trigger...")
-    code, data = api_request(endpoint, arm_token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute")
+    code, data = api_request(endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute")
     if code not in (200, 202):
         _die(f"Failed to execute trigger: HTTP {code} — {data}")
 

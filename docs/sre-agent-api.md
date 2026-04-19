@@ -8,8 +8,8 @@ SRE Agent は **2 種類のトークン** を使い分ける。
 
 | API | resource / audience | 用途 |
 |-----|---------------------|------|
-| データプレーン | `https://azuresre.ai` | Memory, Custom Agents, Connectors, Skills, Hooks, Triggers (作成/一覧/削除) |
-| ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings, **HTTP Trigger 実行**, Thread メッセージ取得 |
+| データプレーン | `https://azuresre.ai` | Memory, Custom Agents, Connectors, Skills, Hooks, Triggers, Threads |
+| ARM コントロールプレーン | `https://management.azure.com` | リソース操作, experimental settings |
 
 ```bash
 # データプレーン
@@ -659,12 +659,11 @@ HTTP Triggers はエージェントを外部から起動するための Webhook 
 
 - 公式ドキュメント: https://sre.azure.com/docs/capabilities/http-triggers
 
-### 認証の使い分け
+### 認証
 
-| 操作 | トークン | 理由 |
-|------|---------|------|
-| 作成 / 一覧 / 削除 | データプレーン (`https://azuresre.ai`) | 管理操作 |
-| **実行 (execute)** | **ARM (`https://management.azure.com`)** | `Microsoft.App/agents/threads/write` 権限が必要 |
+すべての操作でデータプレーントークン (`https://azuresre.ai`) を使用する。
+
+> **Note**: 公式ドキュメントでは execute に ARM トークンが必要と記載されているが、実際にはデータプレーントークンで動作する。
 
 ### 作成
 
@@ -703,7 +702,7 @@ Authorization: Bearer ${DATAPLANE_TOKEN}
 ```bash
 POST ${ENDPOINT}/api/v1/httptriggers/${TRIGGER_ID}/execute
 Content-Type: application/json
-Authorization: Bearer ${ARM_TOKEN}
+Authorization: Bearer ${DATAPLANE_TOKEN}
 
 # ボディはオプション。JSON を渡すとエージェントのプロンプトに追加される
 {"key": "value"}
