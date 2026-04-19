@@ -107,10 +107,15 @@ for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
   tmp_yaml=$(mktemp)
   python3 -c "
-import re, sys
-content = open(sys.argv[1]).read()
-content = re.sub(r'^(  )?handoffs:\s*\n((\s+- .+)\n)*', '\g<1>handoffs: []\n', content, flags=re.MULTILINE)
-open(sys.argv[2], 'w').write(content)
+import yaml, sys
+with open(sys.argv[1]) as f:
+    spec = yaml.safe_load(f)
+if 'spec' in spec and 'handoffs' in spec.get('spec', {}):
+    spec['spec']['handoffs'] = []
+elif 'handoffs' in spec:
+    spec['handoffs'] = []
+with open(sys.argv[2], 'w') as f:
+    yaml.dump(spec, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 " "$yaml_file" "$tmp_yaml"
   $SRECTL agent apply -f "$tmp_yaml" || true
   rm -f "$tmp_yaml"
