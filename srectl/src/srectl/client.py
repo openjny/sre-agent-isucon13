@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import urllib.error
 import urllib.request
@@ -148,13 +149,16 @@ _cached_ctx: tuple[str, str] | None = None
 
 
 def get_ctx(args) -> tuple[str, str]:
-    """Get (endpoint, token), using CLI overrides or auto-resolve."""
+    """Get (endpoint, token), using CLI overrides, env vars, or auto-resolve.
+
+    Supports SRE_AGENT_ENDPOINT and SRE_AGENT_TOKEN env vars for cross-process caching.
+    """
     global _cached_ctx
     if _cached_ctx:
         return _cached_ctx
 
-    endpoint = getattr(args, "endpoint", None)
-    token = getattr(args, "token", None)
+    endpoint = getattr(args, "endpoint", None) or os.environ.get("SRE_AGENT_ENDPOINT")
+    token = getattr(args, "token", None) or os.environ.get("SRE_AGENT_TOKEN")
 
     if not endpoint:
         _, endpoint = resolve_endpoint()

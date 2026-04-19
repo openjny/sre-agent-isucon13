@@ -37,10 +37,18 @@ fi
 # Save to azd env
 azd env set AGENT_TIER "$AGENT_TIER" 2>/dev/null
 
+# ── Pre-resolve endpoint + token (cache for all srectl invocations) ──────────
+export SRE_AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
+export SRE_AGENT_TOKEN=$(az account get-access-token --resource https://azuresre.ai --query accessToken -o tsv 2>/dev/null || echo "")
+
 echo ""
 echo "============================================="
 echo "  SRE Agent — Setup (${AGENT_TIER})"
 echo "============================================="
+echo ""
+
+# ── Clear existing configuration ────────────────────────────────────────────
+bash "$SCRIPT_DIR/sreagent-clear.sh"
 echo ""
 
 # Helper: extract agent name from YAML (supports both v2 and legacy)
@@ -112,35 +120,6 @@ echo "🤖 Creating agents (${AGENT_TIER}) — pass 2: with handoffs..."
 for yaml_file in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
   [ -f "$yaml_file" ] || continue
   $SRECTL agent apply -f "$yaml_file"
-done
-echo ""
-
-# ── Cleanup higher tiers ────────────────────────────────────────────────────
-echo "🧹 Cleaning up inactive tiers..."
-found=false
-for tier in "${ALL_TIERS[@]}"; do
-  [ "$tier" = "$AGENT_TIER" ] && found=true && continue
-  $found || continue
-
-  tier_skills="$ROOT_DIR/sre-config/${tier}/skills"
-  if [ -d "$tier_skills" ]; then
-    for skill_dir in "${tier_skills}"/*/; do
-      [ -d "$skill_dir" ] || continue
-      $SRECTL skill delete "$(basename "$skill_dir")" 2>/dev/null
-    done
-  fi
-
-  for yaml_file in "$ROOT_DIR/sre-config/${tier}/agents/"*.yaml; do
-    [ -f "$yaml_file" ] || continue
-    agent_name=$(agent_name_from_yaml "$yaml_file")
-    [ -z "$agent_name" ] && continue
-    exists=false
-    for active in "$ROOT_DIR/sre-config/${AGENT_TIER}/agents/"*.yaml; do
-      [ -f "$active" ] || continue
-      [ "$(agent_name_from_yaml "$active")" = "$agent_name" ] && exists=true && break
-    done
-    $exists || $SRECTL agent delete "$agent_name" 2>/dev/null
-  done
 done
 echo ""
 

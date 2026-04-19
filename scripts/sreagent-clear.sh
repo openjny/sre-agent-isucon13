@@ -19,6 +19,14 @@ else
   SRECTL="srectl"
 fi
 
+# Pre-resolve endpoint + token if not already cached
+if [ -z "${SRE_AGENT_ENDPOINT:-}" ]; then
+  export SRE_AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
+fi
+if [ -z "${SRE_AGENT_TOKEN:-}" ]; then
+  export SRE_AGENT_TOKEN=$(az account get-access-token --resource https://azuresre.ai --query accessToken -o tsv 2>/dev/null || echo "")
+fi
+
 echo ""
 echo "============================================="
 echo "  SRE Agent — Clear All Configuration"
