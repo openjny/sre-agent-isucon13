@@ -44,17 +44,17 @@ spec:
     - Target: maximize the score through iterative improvements
   handoffDescription: ISUCON13 contestant that investigates, optimizes, and benchmarks the ISUPIPE platform
   tools:
-    - RunAzCliReadCommands
-    - RunAzCliWriteCommands
-    - ExecutePythonCode
-    - GetCurrentUtcTime
-    - SearchMemory
-    - GetAzCliHelp
-    - WaitInMilliSeconds
+  - RunAzCliReadCommands
+  - RunAzCliWriteCommands
+  - ExecutePythonCode
+  - GetCurrentUtcTime
+  - SearchMemory
+  - GetAzCliHelp
+  - WaitInMilliSeconds
   mcpTools:
-    - isucon-mcp_benchmark_start
-    - isucon-mcp_benchmark_status
-    - isucon-mcp_exec
+  - isucon-mcp_benchmark_start
+  - isucon-mcp_benchmark_status
+  - isucon-mcp_exec
   allowedSkills:
-    - isucon-mcp-guide
+  - isucon-mcp-guide
   enableSkills: true
