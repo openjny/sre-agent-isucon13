@@ -24,11 +24,18 @@ azd down --purge
 
 ## エージェントティア (AGENT_TIER)
 
-SRE Agent の構成を4段階で制御できる。`azd env set AGENT_TIER` で切り替え、スクリプト再実行で適用。
+SRE Agent の構成を4段階で制御できる。
 
 ```bash
-azd env set AGENT_TIER L200
-bash scripts/post-provision.sh
+# セットアップ（トリガー作成 + キックまで自動実行）
+bash scripts/sreagent-setup.sh L200
+
+# 全構成を削除してやり直す場合
+bash scripts/sreagent-clear.sh
+bash scripts/sreagent-setup.sh L100
+
+# エージェントの動向をウォッチ
+bash scripts/watch-sreagent.sh
 ```
 
 個別リソースの操作には `srectl` CLI を使用:
