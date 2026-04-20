@@ -55,14 +55,6 @@ echo ""
 bash "$SCRIPT_DIR/sreagent-clear.sh"
 echo ""
 
-# ── Memory ───────────────────────────────────────────────────────────────────
-echo "📚 Adding memory files..."
-MEMORY_FILES=("$ROOT_DIR"/sre-config/base/memory/*.md)
-if [ ${#MEMORY_FILES[@]} -gt 0 ] && [ -f "${MEMORY_FILES[0]}" ]; then
-	$SRECTL memory add "${MEMORY_FILES[@]}"
-fi
-echo ""
-
 # ── MCP connector ────────────────────────────────────────────────────────────
 echo "🔗 Creating MCP connector..."
 MCP_FQDN=$(azd env get-value ISUCON_MCP_FQDN 2>/dev/null || echo "")
@@ -113,7 +105,6 @@ echo "============================================="
 echo ""
 $SRECTL agent list
 $SRECTL skill list
-$SRECTL memory list
 $SRECTL connector list
 echo ""
 echo "============================================="
