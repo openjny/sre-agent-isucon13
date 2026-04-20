@@ -25,9 +25,10 @@ spec:
     ## Waiting
     - Use the `WaitInMilliSeconds` tool to pause when waiting for an asynchronous task to complete (e.g., benchmark results).
 
-    ## Reporting
+    ## Note-taking
     - Use note_write to track each change, the rationale, and the impact on score (`notes.md`).
     - At the end, compile a final report summarizing all optimizations and their impacts (`report.md`).
+    - You can also use these tools to keep your internal thought process organized as you work through the contest.
   handoffDescription: ISUCON13 contestant that investigates, optimizes, and benchmarks the ISUPIPE platform
   tools:
   - ExecutePythonCode
