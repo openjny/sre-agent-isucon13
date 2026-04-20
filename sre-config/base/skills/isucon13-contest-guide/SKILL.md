@@ -1,3 +1,8 @@
+---
+name: isucon13-contest-guide
+description: "ISUCON13 contest manual — server topology, service management, benchmark execution, and rules. Use when: checking environment setup, running benchmarks, or understanding contest constraints"
+---
+
 # ISUCON13 当日マニュアル
 
 ## アプリケーション ISUPipe について

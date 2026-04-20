@@ -1,3 +1,8 @@
+---
+name: isupipe
+description: "ISUPipe application manual — features, terms, constraints, and API specs. Use when: understanding the app domain, checking API behavior or MUST/MAY requirements"
+---
+
 # ISUPipe アプリケーションマニュアル
 
 [ISUCON13 当日マニュアル](../isucon13-contest-guide/SKILL.md) も合わせて確認してください。

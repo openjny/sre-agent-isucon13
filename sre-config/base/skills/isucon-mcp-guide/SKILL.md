@@ -1,6 +1,6 @@
 ---
 name: isucon-mcp-guide
-description: Guide for using ISUCON MCP Server tools to interact with contest VMs, run benchmarks, and record findings
+description: "MCP tool reference — exec, benchmark_start, benchmark_status, note_write, etc. Use when: executing commands on VMs, running benchmarks, or recording findings"
 ---
 
 # MCP Tools Guide
