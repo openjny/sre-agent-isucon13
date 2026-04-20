@@ -9,11 +9,11 @@ export GOPATH="/home/isucon/go"
 export GOMODCACHE="/home/isucon/go/pkg/mod"
 
 ISUCON_DIR="/home/isucon/isucon13"
-IFS=',' read -ra CONTEST_IP_ARRAY <<< "$CONTEST_IPS"
+IFS=',' read -ra CONTEST_IP_ARRAY <<<"$CONTEST_IPS"
 MY_IP="${CONTEST_IP_ARRAY[$((VM_INDEX - 1))]}"
 
 # Create env.sh for init_zone.sh and other scripts that source it
-cat > /home/isucon/env.sh <<ENV_SH
+cat >/home/isucon/env.sh <<ENV_SH
 export ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS=${MY_IP}
 ENV_SH
 chown isucon:isucon /home/isucon/env.sh
@@ -23,8 +23,8 @@ chown isucon:isucon /home/isucon/env.sh
 # ============================================================
 
 if ! command -v mysql &>/dev/null; then
-  echo "Installing MySQL 8.0..."
-  apt-get install -y -qq mysql-server mysql-client
+	echo "Installing MySQL 8.0..."
+	apt-get install -y -qq mysql-server mysql-client
 fi
 
 systemctl enable mysql
@@ -40,7 +40,7 @@ mysql -e "FLUSH PRIVILEGES;"
 
 # Load schema (idempotent - ignore errors if tables exist)
 if [[ -f "$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql" ]]; then
-  mysql isupipe < "$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql" 2>/dev/null || true
+	mysql isupipe <"$ISUCON_DIR/webapp/sql/initdb.d/10_schema.sql" 2>/dev/null || true
 fi
 
 # ============================================================
@@ -48,36 +48,36 @@ fi
 # ============================================================
 
 if ! command -v nginx &>/dev/null; then
-  apt-get install -y -qq nginx
+	apt-get install -y -qq nginx
 fi
 
 # Copy TLS certs from Key Vault (self-signed, generated during infra provisioning)
 CERT_DIR="/etc/nginx/tls"
 mkdir -p "$CERT_DIR"
-if [[ -n "${KEY_VAULT_NAME:-}" ]]; then
-  echo "Fetching TLS certificate from Key Vault: $KEY_VAULT_NAME"
-  KV_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
-  # Retry loop: RBAC propagation can take up to a few minutes
-  for attempt in $(seq 1 12); do
-    TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
-    CERT_VAL=$(curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value // empty')
-    if [[ -n "$CERT_VAL" ]]; then
-      echo "$CERT_VAL" > "$CERT_DIR/_.u.isucon.dev.crt"
-      curl -s "${KV_URL}/secrets/tls-key?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' > "$CERT_DIR/_.u.isucon.dev.key"
-      chmod 600 "$CERT_DIR/_.u.isucon.dev.key"
-      echo "TLS certificate fetched successfully (attempt $attempt)"
-      break
-    fi
-    echo "KV access not ready yet (attempt $attempt/12), waiting 15s..."
-    sleep 15
-  done
+if [[ -n ${KEY_VAULT_NAME:-} ]]; then
+	echo "Fetching TLS certificate from Key Vault: $KEY_VAULT_NAME"
+	KV_URL="https://${KEY_VAULT_NAME}.vault.azure.net"
+	# Retry loop: RBAC propagation can take up to a few minutes
+	for attempt in $(seq 1 12); do
+		TOKEN=$(curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' -H Metadata:true | jq -r '.access_token')
+		CERT_VAL=$(curl -s "${KV_URL}/secrets/tls-cert?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value // empty')
+		if [[ -n $CERT_VAL ]]; then
+			echo "$CERT_VAL" >"$CERT_DIR/_.u.isucon.dev.crt"
+			curl -s "${KV_URL}/secrets/tls-key?api-version=7.4" -H "Authorization: Bearer ${TOKEN}" | jq -r '.value' >"$CERT_DIR/_.u.isucon.dev.key"
+			chmod 600 "$CERT_DIR/_.u.isucon.dev.key"
+			echo "TLS certificate fetched successfully (attempt $attempt)"
+			break
+		fi
+		echo "KV access not ready yet (attempt $attempt/12), waiting 15s..."
+		sleep 15
+	done
 elif [[ -d "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls" ]]; then
-  echo "Falling back to TLS certs from isucon13 repo"
-  cp "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls/"* "$CERT_DIR/"
+	echo "Falling back to TLS certs from isucon13 repo"
+	cp "$ISUCON_DIR/provisioning/ansible/roles/nginx/files/etc/nginx/tls/"* "$CERT_DIR/"
 fi
 
 # Generate nginx config
-cat > /etc/nginx/sites-available/isupipe.conf <<'NGINX_CONF'
+cat >/etc/nginx/sites-available/isupipe.conf <<'NGINX_CONF'
 server {
     listen 443 ssl;
     server_name *.u.isucon.dev;
@@ -106,16 +106,16 @@ systemctl restart nginx
 # ============================================================
 
 if ! command -v pdns_server &>/dev/null; then
-  apt-get install -y -qq pdns-server pdns-backend-mysql
+	apt-get install -y -qq pdns-server pdns-backend-mysql
 fi
 
 # Disable systemd-resolved to free port 53
 systemctl stop systemd-resolved 2>/dev/null || true
 systemctl disable systemd-resolved 2>/dev/null || true
-echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.8.8" >/etc/resolv.conf
 
 # Configure PowerDNS
-cat > /etc/powerdns/pdns.conf <<PDNS_CONF
+cat >/etc/powerdns/pdns.conf <<PDNS_CONF
 launch=gmysql
 gmysql-host=127.0.0.1
 gmysql-port=3306
@@ -131,7 +131,7 @@ chmod 644 /etc/powerdns/pdns.conf
 
 # Initialize PowerDNS schema
 if [[ -f /usr/share/doc/pdns-backend-mysql/schema.mysql.sql ]]; then
-  mysql isudns < /usr/share/doc/pdns-backend-mysql/schema.mysql.sql 2>/dev/null || true
+	mysql isudns </usr/share/doc/pdns-backend-mysql/schema.mysql.sql 2>/dev/null || true
 fi
 
 systemctl enable pdns
@@ -141,7 +141,7 @@ systemctl restart pdns
 sleep 2
 pdnsutil create-zone u.isucon.dev 2>/dev/null || true
 for ip in "${CONTEST_IP_ARRAY[@]}"; do
-  pdnsutil add-record u.isucon.dev pipe A 30 "$ip" 2>/dev/null || true
+	pdnsutil add-record u.isucon.dev pipe A 30 "$ip" 2>/dev/null || true
 done
 
 # ============================================================
@@ -149,16 +149,16 @@ done
 # ============================================================
 
 WEBAPP_DIR="$ISUCON_DIR/webapp/go"
-if [[ -d "$WEBAPP_DIR" ]]; then
-  cd "$WEBAPP_DIR"
-  sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $WEBAPP_DIR && go build -o isupipe ."
+if [[ -d $WEBAPP_DIR ]]; then
+	cd "$WEBAPP_DIR"
+	sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $WEBAPP_DIR && go build -o isupipe ."
 fi
 
 # ============================================================
 # systemd service for isupipe-go
 # ============================================================
 
-cat > /etc/systemd/system/isupipe-go.service <<SERVICE
+cat >/etc/systemd/system/isupipe-go.service <<SERVICE
 [Unit]
 Description=ISUPipe Go Application
 After=network.target mysql.service
@@ -192,8 +192,8 @@ systemctl start isupipe-go
 # ============================================================
 
 if [[ -f "$ISUCON_DIR/webapp/sql/init.sh" ]]; then
-  cd "$ISUCON_DIR/webapp/sql"
-  bash init.sh 2>/dev/null || true
+	cd "$ISUCON_DIR/webapp/sql"
+	bash init.sh 2>/dev/null || true
 fi
 
 echo "=== Contest VM setup complete ==="
