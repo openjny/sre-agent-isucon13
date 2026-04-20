@@ -42,6 +42,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     sku: { family: 'A', name: 'standard' }
     tenantId: tenant().tenantId
     enableRbacAuthorization: true
+    enablePurgeProtection: null // Allow purge so azd down --purge → azd up cycle works
   }
 }
 
