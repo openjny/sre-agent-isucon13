@@ -37,8 +37,12 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
 
     body_bytes, content_type = build_multipart(file_tuples, {"triggerIndexing": "true"})
     code, data = api_request(
-        endpoint, token, "POST", "/api/v1/AgentMemory/upload",
-        raw_body=body_bytes, content_type=content_type,
+        endpoint,
+        token,
+        "POST",
+        "/api/v1/AgentMemory/upload",
+        raw_body=body_bytes,
+        content_type=content_type,
     )
     if code in (200, 201):
         ok(f"uploaded {len(file_tuples)} file(s)")

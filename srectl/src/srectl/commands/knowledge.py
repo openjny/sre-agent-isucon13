@@ -9,7 +9,6 @@ import os
 from srectl.client import api_request, get_ctx
 from srectl.output import die, ok, print_json
 
-
 # ── Knowledge file ───────────────────────────────────────────────────────────
 
 
@@ -44,7 +43,9 @@ def cmd_knowledge_file_add(args: argparse.Namespace) -> None:
             },
         },
     }
-    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body)
+    code, data = api_request(
+        endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body
+    )
     if code in (200, 201, 202):
         ok(f"knowledge/file/{name}")
     else:
@@ -53,7 +54,9 @@ def cmd_knowledge_file_add(args: argparse.Namespace) -> None:
 
 def cmd_knowledge_file_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted knowledge/file/{args.name}")
     else:
@@ -65,8 +68,14 @@ def _list_connectors_by_type(args: argparse.Namespace, dtype: str) -> list:
     code, data = api_request(endpoint, token, "GET", "/api/v2/extendedAgent/connectors")
     if code != 200:
         die(f"HTTP {code}")
-    items = data.get("value", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-    return [c for c in items if c.get("properties", {}).get("dataConnectorType") == dtype]
+    items = (
+        data.get("value", [])
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
+    return [
+        c for c in items if c.get("properties", {}).get("dataConnectorType") == dtype
+    ]
 
 
 def cmd_knowledge_file_list(args: argparse.Namespace) -> None:
@@ -101,7 +110,9 @@ def cmd_knowledge_web_add(args: argparse.Namespace) -> None:
             },
         },
     }
-    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body)
+    code, data = api_request(
+        endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body
+    )
     if code in (200, 201, 202):
         ok(f"knowledge/web/{name} -> {args.url}")
     else:
@@ -110,7 +121,9 @@ def cmd_knowledge_web_add(args: argparse.Namespace) -> None:
 
 def cmd_knowledge_web_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted knowledge/web/{args.name}")
     else:
@@ -182,8 +195,12 @@ def cmd_auth_github_set(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
     body_bytes = f"pat={args.pat}".encode()
     code, data = api_request(
-        endpoint, token, "POST", "/api/v1/github/auth/pat",
-        raw_body=body_bytes, content_type="application/x-www-form-urlencoded",
+        endpoint,
+        token,
+        "POST",
+        "/api/v1/github/auth/pat",
+        raw_body=body_bytes,
+        content_type="application/x-www-form-urlencoded",
     )
     if code in (200, 201, 202):
         ok("auth/github PAT set")
@@ -208,7 +225,11 @@ def cmd_connector_list(args: argparse.Namespace) -> None:
     code, data = api_request(endpoint, token, "GET", "/api/v2/extendedAgent/connectors")
     if code != 200:
         die(f"HTTP {code}")
-    connectors = data.get("value", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    connectors = (
+        data.get("value", [])
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
     if not connectors:
         print("(no connectors)")
         return
@@ -220,7 +241,9 @@ def cmd_connector_list(args: argparse.Namespace) -> None:
 
 def cmd_connector_get(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "GET", f"/api/v2/extendedAgent/connectors/{args.name}")
+    code, data = api_request(
+        endpoint, token, "GET", f"/api/v2/extendedAgent/connectors/{args.name}"
+    )
     if code != 200:
         die(f"HTTP {code}: {data}")
     print_json(data)
@@ -228,7 +251,9 @@ def cmd_connector_get(args: argparse.Namespace) -> None:
 
 def cmd_connector_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v2/extendedAgent/connectors/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted connector/{args.name}")
     else:
@@ -271,7 +296,9 @@ def cmd_mcp_add(args: argparse.Namespace) -> None:
         },
     }
 
-    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body)
+    code, data = api_request(
+        endpoint, token, "PUT", f"/api/v2/extendedAgent/connectors/{name}", body=body
+    )
     if code in (200, 201, 202):
         ok(f"connector/{name} -> {url}")
     else:

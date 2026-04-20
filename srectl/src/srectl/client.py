@@ -35,21 +35,44 @@ def resolve_endpoint(rg: str | None = None) -> tuple[str, str]:
         rg = "rg-isucon13-sreagent"
 
     if not agent_name:
-        agent_name = run_cmd([
-            "az", "resource", "list", "-g", rg,
-            "--resource-type", "Microsoft.App/agents",
-            "--query", "[0].name", "-o", "tsv",
-        ])
+        agent_name = run_cmd(
+            [
+                "az",
+                "resource",
+                "list",
+                "-g",
+                rg,
+                "--resource-type",
+                "Microsoft.App/agents",
+                "--query",
+                "[0].name",
+                "-o",
+                "tsv",
+            ]
+        )
     if not agent_name:
         die(f"No SRE Agent found in {rg}")
 
     if not endpoint:
-        endpoint = run_cmd([
-            "az", "resource", "show", "-g", rg, "-n", agent_name,
-            "--resource-type", "Microsoft.App/agents",
-            "--api-version", "2025-05-01-preview",
-            "--query", "properties.agentEndpoint", "-o", "tsv",
-        ])
+        endpoint = run_cmd(
+            [
+                "az",
+                "resource",
+                "show",
+                "-g",
+                rg,
+                "-n",
+                agent_name,
+                "--resource-type",
+                "Microsoft.App/agents",
+                "--api-version",
+                "2025-05-01-preview",
+                "--query",
+                "properties.agentEndpoint",
+                "-o",
+                "tsv",
+            ]
+        )
     if not endpoint:
         die("Could not resolve agent endpoint")
 
@@ -58,11 +81,19 @@ def resolve_endpoint(rg: str | None = None) -> tuple[str, str]:
 
 def get_token() -> str:
     """Get Azure SRE Agent dataplane token."""
-    token = run_cmd([
-        "az", "account", "get-access-token",
-        "--resource", "https://azuresre.ai",
-        "--query", "accessToken", "-o", "tsv",
-    ])
+    token = run_cmd(
+        [
+            "az",
+            "account",
+            "get-access-token",
+            "--resource",
+            "https://azuresre.ai",
+            "--query",
+            "accessToken",
+            "-o",
+            "tsv",
+        ]
+    )
     if not token:
         die("Failed to get access token (az account get-access-token)")
     return token
@@ -70,11 +101,19 @@ def get_token() -> str:
 
 def get_arm_token() -> str:
     """Get Azure ARM token."""
-    token = run_cmd([
-        "az", "account", "get-access-token",
-        "--resource", "https://management.azure.com",
-        "--query", "accessToken", "-o", "tsv",
-    ])
+    token = run_cmd(
+        [
+            "az",
+            "account",
+            "get-access-token",
+            "--resource",
+            "https://management.azure.com",
+            "--query",
+            "accessToken",
+            "-o",
+            "tsv",
+        ]
+    )
     if not token:
         die("Failed to get ARM access token")
     return token
@@ -121,7 +160,9 @@ def api_request(
             return code, resp_body
 
 
-def build_multipart(files: list[tuple[str, str, bytes]], fields: dict | None = None) -> tuple[bytes, str]:
+def build_multipart(
+    files: list[tuple[str, str, bytes]], fields: dict | None = None
+) -> tuple[bytes, str]:
     """Build a multipart/form-data body."""
     boundary = f"----srectl-{uuid.uuid4().hex}"
     buf = io.BytesIO()
@@ -134,7 +175,9 @@ def build_multipart(files: list[tuple[str, str, bytes]], fields: dict | None = N
 
     for field_name, filename, file_bytes in files:
         buf.write(f"--{boundary}\r\n".encode())
-        buf.write(f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode())
+        disp = f'Content-Disposition: form-data; name="{field_name}"'
+        disp += f'; filename="{filename}"\r\n'
+        buf.write(disp.encode())
         buf.write(b"Content-Type: text/plain\r\n\r\n")
         buf.write(file_bytes)
         buf.write(b"\r\n")

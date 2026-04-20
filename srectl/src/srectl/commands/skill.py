@@ -25,7 +25,9 @@ def cmd_skill_list(args: argparse.Namespace) -> None:
 
 def cmd_skill_get(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "GET", f"/api/v2/extendedAgent/skills/{args.name}")
+    code, data = api_request(
+        endpoint, token, "GET", f"/api/v2/extendedAgent/skills/{args.name}"
+    )
     if code != 200:
         die(f"HTTP {code}: {data}")
     print_json(data)
@@ -35,7 +37,9 @@ def cmd_skill_add(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
     name, description, content = parse_skill_dir(args.dir)
     body = skill_to_api(name, description, content)
-    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/skills/{name}", body=body)
+    code, data = api_request(
+        endpoint, token, "PUT", f"/api/v2/extendedAgent/skills/{name}", body=body
+    )
     if code in (200, 201, 202):
         ok(f"skill/{name}")
     else:
@@ -44,7 +48,9 @@ def cmd_skill_add(args: argparse.Namespace) -> None:
 
 def cmd_skill_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/skills/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v2/extendedAgent/skills/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted skill/{args.name}")
     else:

@@ -9,7 +9,6 @@ import os
 from srectl.client import api_request, get_ctx
 from srectl.output import die, ok, print_json
 
-
 # ── Tool ─────────────────────────────────────────────────────────────────────
 
 
@@ -69,21 +68,27 @@ def cmd_tool_add(args: argparse.Namespace) -> None:
         "api_version": "azuresre.ai/v1",
         "kind": "ToolList",
         "spec": {
-            "tools": [{
-                "name": name,
-                "type": "PythonFunctionTool",
-                "description": description,
-                "function_code": code,
-                "timeout_seconds": args.timeout,
-                "parameters": params,
-            }],
+            "tools": [
+                {
+                    "name": name,
+                    "type": "PythonFunctionTool",
+                    "description": description,
+                    "function_code": code,
+                    "timeout_seconds": args.timeout,
+                    "parameters": params,
+                }
+            ],
         },
     }
 
     raw_body = json.dumps(body).encode()
     code_resp, data = api_request(
-        endpoint, token, "PUT", "/api/v1/extendedAgent/apply",
-        raw_body=raw_body, content_type="text/yaml",
+        endpoint,
+        token,
+        "PUT",
+        "/api/v1/extendedAgent/apply",
+        raw_body=raw_body,
+        content_type="text/yaml",
     )
     if code_resp in (200, 201, 202):
         ok(f"tool/{name}")
@@ -93,7 +98,9 @@ def cmd_tool_add(args: argparse.Namespace) -> None:
 
 def cmd_tool_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v1/extendedAgent/tools/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v1/extendedAgent/tools/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted tool/{args.name}")
     else:
@@ -107,7 +114,9 @@ def cmd_hook_add(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
     body = json.loads(args.json)
     name = body.get("name", args.name)
-    code, data = api_request(endpoint, token, "PUT", f"/api/v2/extendedAgent/hooks/{name}", body=body)
+    code, data = api_request(
+        endpoint, token, "PUT", f"/api/v2/extendedAgent/hooks/{name}", body=body
+    )
     if code in (200, 201, 202):
         ok(f"hook/{name}")
     else:
@@ -119,7 +128,11 @@ def cmd_hook_list(args: argparse.Namespace) -> None:
     code, data = api_request(endpoint, token, "GET", "/api/v2/extendedAgent/hooks")
     if code != 200:
         die(f"HTTP {code}: {data}")
-    hooks = data.get("value", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    hooks = (
+        data.get("value", [])
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
     if not hooks:
         print("(no hooks)")
         return
@@ -134,7 +147,9 @@ def cmd_hook_list(args: argparse.Namespace) -> None:
 
 def cmd_hook_get(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "GET", f"/api/v2/extendedAgent/hooks/{args.name}")
+    code, data = api_request(
+        endpoint, token, "GET", f"/api/v2/extendedAgent/hooks/{args.name}"
+    )
     if code != 200:
         die(f"HTTP {code}: {data}")
     print_json(data)
@@ -142,7 +157,9 @@ def cmd_hook_get(args: argparse.Namespace) -> None:
 
 def cmd_hook_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v2/extendedAgent/hooks/{args.name}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v2/extendedAgent/hooks/{args.name}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted hook/{args.name}")
     else:

@@ -10,7 +10,6 @@ import time
 from srectl.client import api_request, get_ctx
 from srectl.output import die, ok, print_json
 
-
 # ── Trigger ──────────────────────────────────────────────────────────────────
 
 
@@ -25,7 +24,9 @@ def cmd_trigger_create(args: argparse.Namespace) -> None:
     }
     if args.thread_id:
         body["threadId"] = args.thread_id
-    code, data = api_request(endpoint, token, "POST", "/api/v1/httptriggers/create", body=body)
+    code, data = api_request(
+        endpoint, token, "POST", "/api/v1/httptriggers/create", body=body
+    )
     if code in (200, 201, 202):
         if isinstance(data, dict):
             if getattr(args, "output", "text") == "json":
@@ -45,7 +46,13 @@ def cmd_trigger_list(args: argparse.Namespace) -> None:
     code, data = api_request(endpoint, token, "GET", "/api/v1/httptriggers")
     if code != 200:
         die(f"HTTP {code}: {data}")
-    triggers = data if isinstance(data, list) else data.get("value", data.get("triggers", [])) if isinstance(data, dict) else []
+    triggers = (
+        data
+        if isinstance(data, list)
+        else data.get("value", data.get("triggers", []))
+        if isinstance(data, dict)
+        else []
+    )
     if not triggers:
         print("(no triggers)")
         return
@@ -68,7 +75,13 @@ def cmd_trigger_execute(args: argparse.Namespace) -> None:
         except json.JSONDecodeError:
             die(f"Invalid JSON: {args.data}")
 
-    code, data = api_request(endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute", body=payload)
+    code, data = api_request(
+        endpoint,
+        token,
+        "POST",
+        f"/api/v1/httptriggers/{trigger_id}/execute",
+        body=payload,
+    )
     if code in (200, 202):
         if isinstance(data, dict):
             if getattr(args, "output", "text") == "json":
@@ -85,7 +98,9 @@ def cmd_trigger_execute(args: argparse.Namespace) -> None:
 
 def cmd_trigger_delete(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    code, data = api_request(endpoint, token, "DELETE", f"/api/v1/httptriggers/{args.trigger_id}")
+    code, data = api_request(
+        endpoint, token, "DELETE", f"/api/v1/httptriggers/{args.trigger_id}"
+    )
     if code in (200, 202, 204, 404):
         ok(f"deleted trigger/{args.trigger_id}")
     else:
@@ -95,9 +110,13 @@ def cmd_trigger_delete(args: argparse.Namespace) -> None:
 # ── Thread ───────────────────────────────────────────────────────────────────
 
 
-def _fetch_messages(endpoint: str, token: str, thread_id: str, top: int = 20, skip: int = 0) -> list:
+def _fetch_messages(
+    endpoint: str, token: str, thread_id: str, top: int = 20, skip: int = 0
+) -> list:
     code, data = api_request(
-        endpoint, token, "GET",
+        endpoint,
+        token,
+        "GET",
         f"/api/v1/threads/{thread_id}/messages?skip={skip}&top={top}&orderby=timestamp+desc",
     )
     if code != 200:
@@ -162,7 +181,10 @@ def cmd_thread_messages(args: argparse.Namespace) -> None:
 
 def cmd_thread_watch(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
-    print(f"Watching thread {args.thread_id} (Ctrl+C to stop, polling every {args.interval}s)")
+    print(
+        f"Watching thread {args.thread_id}"
+        f" (Ctrl+C to stop, polling every {args.interval}s)"
+    )
     print("-" * 60)
     _watch_loop(endpoint, token, args.thread_id, args.interval)
 
@@ -174,7 +196,12 @@ def cmd_contest_kick(args: argparse.Namespace) -> None:
     endpoint, token = get_ctx(args)
 
     time_limit = args.time_limit
-    prompt = args.prompt or f"ISUCON の競技を開始してください。制限時間は今から{time_limit}分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
+    prompt = args.prompt or (
+        f"ISUCON の競技を開始してください。"
+        f"制限時間は今から{time_limit}分です。"
+        "その間は何回でもベンチマークを走らせて良いですが、"
+        "最後に回したベンチマークのスコアがあなたの得点になります。"
+    )
     agent = args.agent or "isucon"
     trigger_name = args.name or "start-contest"
 
@@ -186,7 +213,9 @@ def cmd_contest_kick(args: argparse.Namespace) -> None:
         "agent": agent,
         "agentMode": "autonomous",
     }
-    code, data = api_request(endpoint, token, "POST", "/api/v1/httptriggers/create", body=body)
+    code, data = api_request(
+        endpoint, token, "POST", "/api/v1/httptriggers/create", body=body
+    )
     if code not in (200, 201, 202):
         die(f"Failed to create trigger: HTTP {code} — {data}")
 
@@ -196,7 +225,9 @@ def cmd_contest_kick(args: argparse.Namespace) -> None:
     print(f"  Trigger ID: {trigger_id}")
 
     print("Executing trigger...")
-    code, data = api_request(endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute")
+    code, data = api_request(
+        endpoint, token, "POST", f"/api/v1/httptriggers/{trigger_id}/execute"
+    )
     if code not in (200, 202):
         die(f"Failed to execute trigger: HTTP {code} — {data}")
 
@@ -206,7 +237,7 @@ def cmd_contest_kick(args: argparse.Namespace) -> None:
         die(f"No threadId in response: {data}")
 
     print(f"  Thread ID:  {thread_id}")
-    print(f"  Portal:     https://sre.azure.com")
+    print("  Portal:     https://sre.azure.com")
     ok(f"Contest kicked! Time limit: {time_limit}min")
     print("")
 

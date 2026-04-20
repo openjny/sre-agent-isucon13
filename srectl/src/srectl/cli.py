@@ -5,7 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 
-from srectl.commands.agent import cmd_agent_apply, cmd_agent_delete, cmd_agent_get, cmd_agent_list, cmd_context
+from srectl.commands.agent import (
+    cmd_agent_apply,
+    cmd_agent_delete,
+    cmd_agent_get,
+    cmd_agent_list,
+    cmd_context,
+)
 from srectl.commands.knowledge import (
     cmd_auth_github_delete,
     cmd_auth_github_set,
@@ -24,7 +30,12 @@ from srectl.commands.knowledge import (
     cmd_mcp_add,
 )
 from srectl.commands.memory import cmd_memory_add, cmd_memory_list
-from srectl.commands.skill import cmd_skill_add, cmd_skill_delete, cmd_skill_get, cmd_skill_list
+from srectl.commands.skill import (
+    cmd_skill_add,
+    cmd_skill_delete,
+    cmd_skill_get,
+    cmd_skill_list,
+)
 from srectl.commands.tool import (
     cmd_hook_add,
     cmd_hook_delete,
@@ -50,7 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="srectl", description="SRE Agent CLI")
     p.add_argument("--endpoint", help="Override agent endpoint URL")
     p.add_argument("--token", help="Override bearer token")
-    p.add_argument("-o", "--output", choices=["text", "json"], default="text", help="Output format (default: text)")
+    p.add_argument(
+        "-o",
+        "--output",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
 
     sub = p.add_subparsers(dest="resource", help="Resource type")
 
@@ -71,7 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     aa = agent_sub.add_parser("apply", help="Create/update agent from YAML")
     aa.add_argument("-f", "--file", required=True, help="Agent YAML file")
-    aa.add_argument("--strip-handoffs", action="store_true", help="Remove handoffs before applying (for two-pass creation)")
+    aa.add_argument(
+        "--strip-handoffs",
+        action="store_true",
+        help="Remove handoffs before applying (for two-pass creation)",
+    )
     aa.set_defaults(func=cmd_agent_apply)
 
     ad = agent_sub.add_parser("delete", help="Delete agent")
@@ -109,7 +130,9 @@ def build_parser() -> argparse.ArgumentParser:
     mu.set_defaults(func=cmd_memory_add)
 
     # knowledge
-    know = sub.add_parser("knowledge", help="Manage knowledge sources (files, web, repos)")
+    know = sub.add_parser(
+        "knowledge", help="Manage knowledge sources (files, web, repos)"
+    )
     know_sub = know.add_subparsers(dest="action")
 
     kf = know_sub.add_parser("file", help="Manage knowledge files")
@@ -217,7 +240,9 @@ def build_parser() -> argparse.ArgumentParser:
     ma = mcp_sub.add_parser("add", help="Create/update MCP connector (HTTP)")
     ma.add_argument("--name", required=True, help="Connector name")
     ma.add_argument("--url", required=True, help="MCP server endpoint URL")
-    ma.add_argument("--header", action="append", help="Header as KEY=VALUE (e.g. X-API-Key=secret)")
+    ma.add_argument(
+        "--header", action="append", help="Header as KEY=VALUE (e.g. X-API-Key=secret)"
+    )
     ma.set_defaults(func=cmd_mcp_add)
 
     # tool
@@ -225,15 +250,23 @@ def build_parser() -> argparse.ArgumentParser:
     tool_sub = tool.add_subparsers(dest="action")
 
     tl = tool_sub.add_parser("list", help="List all tools")
-    tl.add_argument("--source", choices=["system", "mcp", "custom"], help="Filter by source")
+    tl.add_argument(
+        "--source", choices=["system", "mcp", "custom"], help="Filter by source"
+    )
     tl.set_defaults(func=cmd_tool_list)
 
     tc = tool_sub.add_parser("add", help="Add a Python tool via apply API")
     tc.add_argument("--name", required=True, help="Tool name")
     tc.add_argument("--description", required=True, help="Tool description")
-    tc.add_argument("--code-file", required=True, help="Python file with main() function")
-    tc.add_argument("--timeout", type=int, default=120, help="Timeout in seconds (default: 120)")
-    tc.add_argument("--param", action="append", help="Parameter as name:type[:description]")
+    tc.add_argument(
+        "--code-file", required=True, help="Python file with main() function"
+    )
+    tc.add_argument(
+        "--timeout", type=int, default=120, help="Timeout in seconds (default: 120)"
+    )
+    tc.add_argument(
+        "--param", action="append", help="Parameter as name:type[:description]"
+    )
     tc.set_defaults(func=cmd_tool_add)
 
     td = tool_sub.add_parser("delete", help="Delete a custom tool")
@@ -249,7 +282,12 @@ def build_parser() -> argparse.ArgumentParser:
     trc.add_argument("--prompt", required=True, help="Agent prompt text")
     trc.add_argument("--description", default="", help="Trigger description")
     trc.add_argument("--agent", default="isucon", help="Agent name (default: isucon)")
-    trc.add_argument("--mode", choices=["autonomous", "review"], default="autonomous", help="Agent mode")
+    trc.add_argument(
+        "--mode",
+        choices=["autonomous", "review"],
+        default="autonomous",
+        help="Agent mode",
+    )
     trc.add_argument("--thread-id", help="Existing thread ID to reuse")
     trc.set_defaults(func=cmd_trigger_create)
 
@@ -271,12 +309,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     thm = thread_sub.add_parser("messages", help="Get thread messages")
     thm.add_argument("thread_id", help="Thread ID")
-    thm.add_argument("--top", type=int, default=20, help="Number of messages (default: 20)")
+    thm.add_argument(
+        "--top", type=int, default=20, help="Number of messages (default: 20)"
+    )
     thm.set_defaults(func=cmd_thread_messages)
 
     thw = thread_sub.add_parser("watch", help="Watch thread messages (poll)")
     thw.add_argument("thread_id", help="Thread ID")
-    thw.add_argument("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+    thw.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Poll interval in seconds (default: 30)",
+    )
     thw.set_defaults(func=cmd_thread_watch)
 
     # contest
@@ -284,17 +329,33 @@ def build_parser() -> argparse.ArgumentParser:
     contest_sub = contest.add_subparsers(dest="action")
 
     ck = contest_sub.add_parser("kick", help="Create trigger + execute + watch")
-    ck.add_argument("--name", default="start-contest", help="Trigger name (default: start-contest)")
-    ck.add_argument("--prompt", help="Custom agent prompt (default: standard ISUCON prompt)")
+    ck.add_argument(
+        "--name", default="start-contest", help="Trigger name (default: start-contest)"
+    )
+    ck.add_argument(
+        "--prompt", help="Custom agent prompt (default: standard ISUCON prompt)"
+    )
     ck.add_argument("--agent", default="isucon", help="Agent name (default: isucon)")
-    ck.add_argument("--time-limit", type=int, default=60, help="Time limit in minutes (default: 60)")
+    ck.add_argument(
+        "--time-limit", type=int, default=60, help="Time limit in minutes (default: 60)"
+    )
     ck.add_argument("--no-watch", action="store_true", help="Don't watch after kick")
-    ck.add_argument("--interval", type=int, default=30, help="Watch poll interval in seconds (default: 30)")
+    ck.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Watch poll interval in seconds (default: 30)",
+    )
     ck.set_defaults(func=cmd_contest_kick)
 
     cw = contest_sub.add_parser("watch", help="Watch a contest thread")
     cw.add_argument("thread_id", help="Thread ID")
-    cw.add_argument("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+    cw.add_argument(
+        "--interval",
+        type=int,
+        default=30,
+        help="Poll interval in seconds (default: 30)",
+    )
     cw.set_defaults(func=cmd_contest_watch)
 
     return p
