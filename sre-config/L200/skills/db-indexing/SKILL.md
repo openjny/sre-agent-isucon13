@@ -1,55 +1,70 @@
 ---
 name: db-indexing
-description: Add missing database indexes to the ISUPIPE MySQL schema for immediate performance improvement
+description: General strategy for identifying and adding missing database indexes in ISUCON web applications
 ---
 
-# Database Indexing — ISUPIPE
+# Database Indexing Strategy
 
-The initial ISUPIPE schema has no secondary indexes. Adding these indexes is the highest-ROI optimization.
+ISUCON の初期実装では、テーブルに適切なインデックスが設定されていないことが多い。スキーマを調査し、クエリパターンに基づいてインデックスを追加するのは最も ROI の高い最適化の一つ。
 
-## Missing Indexes
+## 調査手順
 
-Run these on vm1 (or whichever VM hosts the primary MySQL):
+### 1. スキーマの確認
+
+```bash
+# テーブル一覧
+mysql -u <user> -p<password> <database> -e "SHOW TABLES"
+
+# テーブル定義の確認
+mysql -u <user> -p<password> <database> -e "SHOW CREATE TABLE <table_name>"
+
+# 既存インデックスの確認
+mysql -u <user> -p<password> <database> -e "SHOW INDEX FROM <table_name>"
+```
+
+### 2. クエリパターンの特定
+
+- ソースコードの SQL クエリを grep して、`WHERE`, `JOIN`, `ORDER BY` で使われるカラムを特定
+- slow query log を有効化して頻出クエリを分析
+
+```bash
+# Go の場合
+grep -rn 'SELECT\|WHERE\|JOIN\|ORDER BY' /path/to/webapp/go/
+```
+
+## インデックスの追加パターン
+
+### 外部キー (FK) カラム
+
+`user_id`, `*_id` などの参照カラムにインデックスがない場合は追加:
 
 ```sql
-ALTER TABLE livestreams ADD INDEX idx_user_id (user_id);
-ALTER TABLE livecomments ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE reactions ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE livecomments ADD INDEX idx_livestream_id_created_at (livestream_id, created_at);
-ALTER TABLE icons ADD INDEX idx_user_id (user_id);
-ALTER TABLE livestream_tags ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE themes ADD INDEX idx_user_id (user_id);
+ALTER TABLE <table> ADD INDEX idx_<column> (<column>);
 ```
 
-## How to Apply
+### 複合インデックス
 
-```bash
-exec host="vm1" command="mysql -u isucon -pisucon isupipe -e \"
-ALTER TABLE livestreams ADD INDEX idx_user_id (user_id);
-ALTER TABLE livecomments ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE reactions ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE livecomments ADD INDEX idx_livestream_id_created_at (livestream_id, created_at);
-ALTER TABLE icons ADD INDEX idx_user_id (user_id);
-ALTER TABLE livestream_tags ADD INDEX idx_livestream_id (livestream_id);
-ALTER TABLE themes ADD INDEX idx_user_id (user_id);
-\""
+WHERE + ORDER BY の組み合わせが頻出する場合:
+
+```sql
+ALTER TABLE <table> ADD INDEX idx_<col1>_<col2> (<col1>, <col2>);
 ```
 
-## Important Notes
+### カバリングインデックス
 
-- Indexes are reset on `POST /api/initialize` (which runs `init.sh` → drops and recreates tables)
-- To persist indexes across benchmarks, add the ALTER TABLE statements to the init script:
-  `/home/isucon/isucon13/webapp/sql/initdb.d/10_schema.sql`
-- Or add them to a post-init hook that runs after `init.sh`
+SELECT するカラムも含めて、テーブルアクセスなしで結果を返せる場合:
 
-## Verification
-
-```bash
-exec host="vm1" command="mysql -u isucon -pisucon isupipe -e 'SHOW INDEX FROM livestreams'"
+```sql
+ALTER TABLE <table> ADD INDEX idx_covering (<where_col>, <select_col>);
 ```
 
-## Expected Impact
+## 重要な注意点
 
-- Statistics endpoints become 10-100x faster
-- Reduces full table scans on every API call
-- Typical score improvement: +5,000-15,000 from initial ~3,600
+- ISUCON のベンチマーカーは多くの場合 `/api/initialize` でデータを初期化する
+- `init.sh` やスキーマファイルで DROP TABLE / CREATE TABLE される場合、**インデックスも消える**
+- インデックスを永続化するには、スキーマファイル自体を修正するか、初期化後に実行されるスクリプトに追加する
+
+## 効果
+
+- フルテーブルスキャンをインデックススキャンに変えるだけで 10-100 倍の高速化が見込める
+- 特に統計・集計系エンドポイントへの効果が大きい

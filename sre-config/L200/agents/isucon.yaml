@@ -26,8 +26,7 @@ spec:
     - All VMs are Ubuntu 22.04, private IPs only
 
     ## Scoring
-    - Score = total ISUCOIN tips during 60s load test
-    - Initial: ~3,600
+    - Score = total ISUCOIN tips earned during benchmark load test
     - Target: maximize through iterative investigate → fix → benchmark cycles
 
     You can also directly use MCP tools when the task is simple enough to handle

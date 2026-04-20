@@ -1,71 +1,85 @@
 ---
 name: n-plus-one-fix
-description: Fix N+1 query problems in the ISUPIPE Go application by replacing loop queries with JOINs and batch queries
+description: General techniques for identifying and fixing N+1 query problems in ISUCON web applications
 ---
 
-# N+1 Query Elimination — ISUPIPE
+# N+1 Query Elimination
 
-The ISUPIPE Go app has severe N+1 query problems in statistics and listing endpoints.
+ISUCON の初期実装にはほぼ確実に N+1 クエリ問題が存在する。ループ内でクエリを発行するパターンを見つけて、JOIN やバッチクエリに置き換えるのは定番の最適化。
 
-## Problem Areas
+## N+1 の見つけ方
 
-### 1. User Statistics (`GET /api/user/:username/statistics`)
+### 1. ソースコードの grep
 
-**Current**: Loops over all user's livestreams, running a query per stream to sum tips and count reactions.
-
-**Fix**: Replace with a single aggregation query:
-
-```sql
--- Total tips for a user (instead of per-livestream loop)
-SELECT IFNULL(SUM(lc.tip), 0)
-FROM livecomments lc
-INNER JOIN livestreams ls ON ls.id = lc.livestream_id
-WHERE ls.user_id = ?
+```bash
+# ループ内のクエリを探す
+grep -n 'for.*{' /path/to/webapp/go/*.go | head -20
+# その近くにある SELECT を確認
+grep -n 'SELECT\|Query\|QueryRow\|Get\|Find' /path/to/webapp/go/*.go
 ```
 
-```sql
--- Total reactions for a user
-SELECT COUNT(*)
-FROM reactions r
-INNER JOIN livestreams ls ON ls.id = r.livestream_id
-WHERE ls.user_id = ?
+### 2. slow query log の分析
+
+同じクエリが大量に実行されていれば N+1 の兆候:
+
+```bash
+pt-query-digest /var/log/mysql/slow.log | head -50
 ```
 
-### 2. Livestream Statistics (`GET /api/livestream/:id/statistics`)
+### 3. よくある発生パターン
 
-**Current**: Loops over all comments/reactions individually.
+- **一覧取得 → ループでリレーション取得**: コメント一覧の各コメントに対してユーザー情報を個別取得
+- **統計計算 → ループで集計**: ユーザーごとにループしてスコアを個別集計
+- **ネストされた関連データ**: 親 → 子 → 孫と 3 段階ループ
 
-**Fix**: Single query with GROUP BY:
+## 修正パターン
 
-```sql
-SELECT IFNULL(SUM(tip), 0) as total_tips, COUNT(*) as total_comments
-FROM livecomments
-WHERE livestream_id = ?
-```
-
-### 3. User Info in Lists
-
-**Current**: For each comment/reaction in a list, fetches user info individually.
-
-**Fix**: Batch fetch users with `IN` clause or use JOINs:
+### パターン 1: JOIN で一発取得
 
 ```sql
-SELECT lc.*, u.name, u.display_name
-FROM livecomments lc
-INNER JOIN users u ON u.id = lc.user_id
-WHERE lc.livestream_id = ?
-ORDER BY lc.created_at DESC
+-- Before: SELECT * FROM comments WHERE post_id = ? (ループ内)
+-- After:
+SELECT c.*, u.name, u.display_name
+FROM comments c
+INNER JOIN users u ON u.id = c.user_id
+WHERE c.post_id = ?
 ```
 
-## Implementation Steps
+### パターン 2: バッチ取得 + IN 句
 
-1. Read current Go source: `exec host="vm1" command="cat /home/isucon/isucon13/webapp/go/stats_handler.go"`
-2. Identify the loop with individual queries
-3. Replace with a JOIN query
-4. Rebuild: `exec host="vm1" command="cd /home/isucon/isucon13/webapp/go && go build -o isupipe ."`
-5. Restart: `exec host="vm1" command="sudo systemctl restart isupipe-go"`
+```go
+// IDs を集めてまとめて取得
+ids := make([]int64, len(items))
+for i, item := range items {
+    ids[i] = item.UserID
+}
+// SELECT * FROM users WHERE id IN (?, ?, ?, ...)
+```
 
-## Expected Impact
+### パターン 3: 集計クエリの統合
 
-- Statistics endpoints go from O(n²) to O(1) database queries
-- Typical score improvement: +3,000-10,000
+```sql
+-- Before: ループで個別 COUNT/SUM
+-- After: GROUP BY で一括集計
+SELECT user_id, COUNT(*) as cnt, IFNULL(SUM(amount), 0) as total
+FROM transactions
+GROUP BY user_id
+```
+
+## 実装手順
+
+1. スローなエンドポイントを特定（alp や slow query log で）
+2. そのハンドラのソースコードを読む
+3. ループ内クエリを JOIN / バッチクエリに置き換え
+4. リビルド → 再起動 → ベンチマーク
+
+## 注意点
+
+- JOIN にする際、LEFT JOIN と INNER JOIN の使い分けに注意（データが存在しない場合の挙動）
+- IN 句のパラメータ数が多すぎる場合は分割が必要（MySQL のデフォルトは問題ないが、数万件は避ける）
+- 集計クエリ統合時は、元のロジックと結果が一致することを pretest で検証
+
+## 効果
+
+- O(N) や O(N²) のクエリ回数を O(1) に削減
+- 統計・ランキング系エンドポイントでは劇的な改善が見込める

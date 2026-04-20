@@ -23,9 +23,7 @@ spec:
     benchmark_start, poll benchmark_status until the job completes.
 
     ## Interpreting Results
-    - Score = total ISUCOIN (tips) collected during 60s load test
-    - Initial score is typically ~3,600
-    - Top teams scored 200,000-468,000
+    - Score = total ISUCOIN (tips) collected during benchmark load test
     - Watch for: HTTP errors, DNS failures, timeout counts
     - Key metrics: successful requests, failed requests, DNS resolution stats
 

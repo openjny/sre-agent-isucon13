@@ -1,70 +1,74 @@
 ---
 name: dns-optimization
-description: Optimize PowerDNS performance against DNS water torture attacks during ISUCON13 benchmark
+description: Optimize PowerDNS performance for ISUCON competitions where DNS resolution is a component
 ---
 
-# DNS Optimization — ISUPIPE
+# DNS Optimization (PowerDNS)
 
-The ISUCON13 benchmark includes a "DNS water torture attack" — massive random subdomain queries that overwhelm PowerDNS with MySQL backend.
+ISUCON では PowerDNS + MySQL バックエンドが使われることがある。ベンチマーカーが大量の DNS クエリを発行する場合、DNS がボトルネックになりうる。
 
-## Problem
+## よくある問題
 
-- Benchmarker queries random subdomains like `randomuser123.u.isucon.dev`
-- Each query hits PowerDNS → MySQL lookup in `isudns.records` table
-- Thousands of queries/second → MySQL becomes bottleneck
+- PowerDNS が MySQL バックエンドにクエリするたびに DB アクセスが発生
+- ランダムなサブドメインへの大量クエリ（DNS 水責め攻撃的なパターン）で負荷が増大
+- NXDOMAIN（存在しないドメイン）のレスポンスも MySQL への問い合わせが必要
 
-## Fix 1: Add Indexes to isudns Tables
+## 対策 1: isudns テーブルにインデックス追加
 
-```bash
-exec host="vm1" command="mysql -u isucon -pisucon isudns -e \"
+PowerDNS の records テーブルにインデックスがない場合がある:
+
+```sql
 SHOW INDEX FROM records;
 ALTER TABLE records ADD INDEX idx_name_type (name, type);
 ALTER TABLE records ADD INDEX idx_domain_id (domain_id);
-\""
 ```
 
-## Fix 2: Increase PowerDNS Cache
+## 対策 2: PowerDNS キャッシュの有効化
 
-Edit `/etc/powerdns/pdns.conf`:
+`/etc/powerdns/pdns.conf` にキャッシュ設定を追加:
 
-```bash
-exec host="vm1" command="sudo tee -a /etc/powerdns/pdns.conf << 'EOF'
+```
 query-cache-ttl=60
 negquery-cache-ttl=60
 cache-ttl=60
-EOF"
-exec host="vm1" command="sudo systemctl restart pdns"
 ```
 
-## Fix 3: Application-Level DNS (Advanced)
+- `query-cache-ttl`: クエリ結果のキャッシュ秒数
+- `negquery-cache-ttl`: NXDOMAIN のキャッシュ秒数（水責め対策に効果的）
 
-Bypass PowerDNS entirely by handling DNS in the Go app:
+設定変更後:
+```bash
+sudo systemctl restart pdns
+```
 
-1. Register user subdomains in-memory when users are created
-2. Implement a simple DNS responder or use PowerDNS pipe backend
-3. For ISUCON13, the main bottleneck is NXDOMAIN lookups — cache negative results
+## 対策 3: アプリケーションレベル DNS（上級）
 
-## Fix 4: Reduce DNS Query Volume
+PowerDNS を完全にバイパスして、Go アプリで DNS を処理する:
 
-The benchmarker resolves subdomains for each virtual user. If you use multi-server distribution, configure the benchmark to use specific IPs:
+1. ユーザー作成時にサブドメインをインメモリに登録
+2. シンプルな DNS レスポンダーを実装、または PowerDNS の pipe バックエンドを使用
+3. NXDOMAIN を高速に返すことが重要（存在しないサブドメインのクエリが大量にくる場合）
+
+## 対策 4: DNS 応答の TTL 設定
+
+ベンチマーカーが TTL に従ってキャッシュする場合、適切な TTL を設定することでクエリ数を削減:
 
 ```bash
-# Check current DNS setup
-exec host="vm1" command="dig pipe.u.isucon.dev @127.0.0.1 +short"
+# 現在の DNS 設定を確認
+dig pipe.u.isucon.dev @127.0.0.1 +short
 
-# Ensure DNS returns appropriate IPs
-exec host="vm1" command="mysql -u isucon -pisucon isudns -e \"SELECT * FROM records WHERE type='A' AND name LIKE '%.u.isucon.dev' LIMIT 10;\""
+# TTL を確認
+dig pipe.u.isucon.dev @127.0.0.1 | grep -A1 'ANSWER SECTION'
 ```
 
-## Verification
+## 検証
 
 ```bash
-# Test DNS resolution speed
-exec host="vm1" command="time for i in $(seq 1 100); do dig +short test\$i.u.isucon.dev @127.0.0.1 > /dev/null; done"
+# DNS 解決速度のベンチマーク
+time for i in $(seq 1 100); do dig +short test$i.u.isucon.dev @127.0.0.1 > /dev/null; done
 ```
 
-## Expected Impact
+## 効果
 
-- Index + cache: reduces DNS query time by 10-50x
-- Application-level DNS: eliminates MySQL overhead entirely
-- Typical improvement: +5,000-15,000 score
+- インデックス + キャッシュで DNS クエリ時間を大幅削減
+- アプリケーションレベル DNS で MySQL オーバーヘッドを完全に排除

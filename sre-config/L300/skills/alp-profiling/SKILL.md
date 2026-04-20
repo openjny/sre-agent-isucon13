@@ -5,17 +5,17 @@ description: Install and use alp (Access Log Profiler) to identify slow nginx en
 
 # alp Profiling — nginx Access Log Analysis
 
-alp analyzes nginx access logs in LTSV format to identify the slowest endpoints.
+alp は nginx のアクセスログを LTSV 形式で解析し、遅いエンドポイントを特定するツール。ISUCON では定番のプロファイリング手法。
 
-## Install alp
+## alp のインストール
 
 ```bash
-exec host="vm1" command="wget -q https://github.com/tkuchiki/alp/releases/download/v1.0.21/alp_linux_amd64.tar.gz -O /tmp/alp.tar.gz && cd /tmp && tar xzf alp.tar.gz && sudo mv alp /usr/local/bin/ && alp --version"
+wget -q https://github.com/tkuchiki/alp/releases/download/v1.0.21/alp_linux_amd64.tar.gz -O /tmp/alp.tar.gz && cd /tmp && tar xzf alp.tar.gz && sudo mv alp /usr/local/bin/ && alp --version
 ```
 
-## Configure nginx for LTSV
+## nginx を LTSV 形式に設定
 
-Update nginx log format in `/etc/nginx/nginx.conf`:
+`/etc/nginx/nginx.conf` の `http` ブロック内に以下を追加:
 
 ```nginx
 log_format ltsv "time:$time_local"
@@ -37,37 +37,50 @@ log_format ltsv "time:$time_local"
 access_log /var/log/nginx/access.log ltsv;
 ```
 
-Then reload nginx:
+設定後に nginx をリロード:
 ```bash
-exec host="vm1" command="sudo nginx -t && sudo systemctl reload nginx"
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Usage
+## 使い方
 
-After running a benchmark:
+### 基本（合計時間でソート）
 
 ```bash
-# Sort by total time (most impactful endpoints)
-exec host="vm1" command="sudo alp ltsv --file /var/log/nginx/access.log --sort sum -r"
-
-# Group parameterized URLs
-exec host="vm1" command="sudo alp ltsv --file /var/log/nginx/access.log --sort sum -r -m '/api/user/[^/]+/icon,/api/user/[^/]+/statistics,/api/user/[^/]+$,/api/livestream/[0-9]+/statistics,/api/livestream/[0-9]+/livecomment,/api/livestream/[0-9]+/reaction,/api/livestream/[0-9]+$'"
+sudo alp ltsv --file /var/log/nginx/access.log --sort sum -r
 ```
 
-## Key Metrics
+### パラメータ付き URL のグルーピング
 
-| Column | Meaning |
-|--------|---------|
-| COUNT | Number of requests |
-| SUM | Total response time |
-| AVG | Average response time |
-| MAX | Maximum response time |
-| P99 | 99th percentile response time |
+動的パス（ID 等）を含む URL は `-m` オプションで正規表現グルーピングする。アプリのルーティングを確認して適切なパターンを設定:
 
-## Workflow
+```bash
+# 例: /api/users/123 や /api/posts/456/comments をグルーピング
+sudo alp ltsv --file /var/log/nginx/access.log --sort sum -r \
+  -m '/api/users/[0-9]+,/api/posts/[0-9]+/comments,/api/posts/[0-9]+$'
+```
 
-1. Clear logs: `exec host="vm1" command="sudo truncate -s 0 /var/log/nginx/access.log"`
-2. Run benchmark: `benchmark_start`
-3. Wait for completion: `benchmark_status`
-4. Analyze: Run alp with `-m` grouping
-5. Focus on endpoints with highest SUM (total time)
+**ポイント**: まずソースコードのルーティング定義 (router) を読んで、パラメータ付き URL を特定してからパターンを作成する。
+
+## 主要メトリクス
+
+| Column | 意味 |
+|--------|------|
+| COUNT | リクエスト数 |
+| SUM | レスポンス時間合計 |
+| AVG | 平均レスポンス時間 |
+| MAX | 最大レスポンス時間 |
+| P99 | 99パーセンタイル |
+
+## ワークフロー
+
+1. ログをクリア: `sudo truncate -s 0 /var/log/nginx/access.log`
+2. ベンチマーク実行
+3. alp で解析: SUM が最も大きいエンドポイントが最優先の改善対象
+4. 改善 → 再ベンチ → 再解析のサイクルを回す
+
+## Tips
+
+- SUM（合計時間）が最も重要。1 リクエスト 0.1 秒でも 10,000 回呼ばれれば 1,000 秒
+- MAX が大きいエンドポイントはタイムアウトや異常系の可能性
+- COUNT が多い = ベンチマーカーが重点的にアクセスしている箇所

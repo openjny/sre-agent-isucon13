@@ -1,66 +1,55 @@
 ---
 name: icon-caching
-description: Implement icon image caching with ETag and 304 Not Modified responses to eliminate redundant BLOB reads from MySQL
+description: General techniques for optimizing user icon/avatar image serving in ISUCON web applications
 ---
 
-# Icon Caching (ETag / 304) — ISUPIPE
+# Icon / Image Caching Strategy
 
-Every icon request currently reads a LONGBLOB from MySQL. The benchmark client sends `If-None-Match` headers, but the app ignores them.
+ISUCON の Web アプリでは、ユーザーアイコンやプロフィール画像を DB (BLOB) に格納していることが多い。リクエストごとに大きな BLOB を読み出すのはボトルネックになりやすい。
 
-## Current Behavior
+## よくあるパターン
 
-```
-GET /api/user/:username/icon
-→ SELECT image FROM icons WHERE user_id = ?  (LONGBLOB, often 100KB+)
-→ 200 OK with full image body every time
-```
+1. **アイコンが DB の BLOB カラムに格納されている** → 毎リクエストで数十〜数百 KB の読み出し
+2. **条件付き GET (ETag / If-None-Match) に対応していない** → 変更がなくても毎回フルボディを返す
 
-## Fix Strategy
+## 対策
 
-### Option A: ETag with SHA256 hash (recommended)
+### 方法 A: ETag / 304 Not Modified の実装
 
-1. When an icon is uploaded (`POST /api/user/me/icon`), compute SHA256 hash and store it
-2. On `GET /api/user/:username/icon`:
-   - Read the hash (not the image) from DB or cache
-   - Compare with `If-None-Match` header
-   - If match → return `304 Not Modified` (no body)
-   - If no match → read and return full image with `ETag` header
-
-### Option B: Serve from filesystem
-
-1. On upload, write icon to `/home/isucon/isucon13/webapp/public/icons/{user_id}.jpg`
-2. Configure nginx to serve `/api/user/:username/icon` directly from filesystem
-3. Add `ETag` and `If-None-Match` handling in nginx (automatic with `sendfile`)
-
-## Implementation (Option A)
-
-Key changes to `user_handler.go`:
+1. 画像アップロード時に SHA256 ハッシュを計算・保存
+2. GET リクエスト時:
+   - `If-None-Match` ヘッダーとハッシュを比較
+   - 一致 → `304 Not Modified`（ボディなし）
+   - 不一致 → `200 OK` + `ETag` ヘッダー付きで画像返却
 
 ```go
-// In getIconHandler:
-// 1. Get icon hash (add icon_hash column or compute on read)
-iconHash := fmt.Sprintf("%x", sha256.Sum256(iconImage))
-
-// 2. Check If-None-Match
-if c.Request().Header.Get("If-None-Match") == fmt.Sprintf(`"%s"`, iconHash) {
+// 例: Go (echo)
+hash := fmt.Sprintf("%x", sha256.Sum256(imageData))
+if c.Request().Header.Get("If-None-Match") == fmt.Sprintf(`"%s"`, hash) {
     return c.NoContent(http.StatusNotModified)
 }
-
-// 3. Return with ETag
-c.Response().Header().Set("ETag", fmt.Sprintf(`"%s"`, iconHash))
-return c.Blob(http.StatusOK, "image/jpeg", iconImage)
+c.Response().Header().Set("ETag", fmt.Sprintf(`"%s"`, hash))
+return c.Blob(http.StatusOK, "image/jpeg", imageData)
 ```
 
-## Adding icon_hash Column
+### 方法 B: ファイルシステムから配信
 
-```sql
-ALTER TABLE icons ADD COLUMN icon_hash VARCHAR(64) DEFAULT NULL;
-```
+1. アップロード時にファイルに書き出し
+2. nginx の `sendfile` + `etag on` で直接配信
+3. アプリサーバーへのリクエスト自体をなくせる
 
-Update the upload handler to compute and store the hash on insert.
+### 方法 C: インメモリキャッシュ
 
-## Expected Impact
+1. 初回読み出し時にメモリにキャッシュ
+2. アップロード時にキャッシュを更新
+3. DB アクセスを最小化
 
-- Most icon requests become 304 (no body transfer)
-- Reduces MySQL BLOB reads by ~90%
-- Typical score improvement: +2,000-5,000
+## 注意点
+
+- アイコン更新後の反映遅延に注意（ベンチマーカーが一定時間以内の反映を要求する場合がある）
+- `POST /api/initialize` でデータリセットされる場合、キャッシュも適切にクリアする
+- ファイルシステム配信の場合、パーミッションや nginx の設定に注意
+
+## 効果
+
+- BLOB 読み出しの大部分を 304 レスポンスに置き換えることで、DB 負荷とネットワーク転送量を大幅に削減

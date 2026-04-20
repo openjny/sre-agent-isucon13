@@ -5,77 +5,54 @@ description: Common ISUCON scoring patterns and strategies to achieve score jump
 
 # ISUCON Scoring Patterns — Historical Strategies
 
-Patterns observed across ISUCON competitions (ISUCON 9-13) that consistently lead to score jumps.
+過去の ISUCON (ISUCON 9-13) で観察された、スコアジャンプにつながるパターン集。
 
-## Score Plateaus and Breakthroughs
+## スコア停滞と突破のパターン
 
-| Score Range | Typical State | Breakthrough Strategy |
-|-------------|--------------|----------------------|
-| 0-5,000 | Default implementation | Add DB indexes, fix obvious N+1 |
-| 5,000-15,000 | Basic indexes added | Eliminate N+1 in hot paths, enable caching |
-| 15,000-50,000 | Single-server optimized | Multi-server distribution, LB setup |
-| 50,000-100,000 | Multi-server + optimized queries | App-level caching, DNS optimization |
-| 100,000-200,000+ | All optimizations applied | Fine-tuning, edge cases, concurrency |
+| 状態 | 突破戦略 |
+|------|---------|
+| 初期実装のまま | DB インデックス追加、明らかな N+1 修正 |
+| 基本インデックス済み | ホットパスの N+1 解消、キャッシュ導入 |
+| 単一サーバーで最適化済み | マルチサーバー分散、LB セットアップ |
+| マルチサーバー + クエリ最適化 | アプリレベルキャッシュ、DNS 最適化 |
+| 全最適化済み | ファインチューニング、エッジケース、並行性 |
 
-## High-Impact Patterns (All ISUCONs)
+## 高インパクトパターン
 
-### 1. The "Index Everything" Pattern
-Every ISUCON has intentionally missing indexes. Check ALL foreign keys and WHERE columns:
+### 1. "Index Everything" パターン
+全 ISUCON で意図的にインデックスが欠落している。全 FK カラムと WHERE で使われるカラムをチェック:
 ```sql
--- Find tables without secondary indexes
 SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
-WHERE TABLE_SCHEMA = 'isupipe' AND TABLE_NAME NOT IN (
+WHERE TABLE_SCHEMA = '<dbname>' AND TABLE_NAME NOT IN (
     SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = 'isupipe' AND INDEX_NAME != 'PRIMARY'
+    WHERE TABLE_SCHEMA = '<dbname>' AND INDEX_NAME != 'PRIMARY'
 );
 ```
 
-### 2. The "Single Heavy Endpoint" Pattern
-Usually one endpoint consumes 50%+ of total time. Fix that one endpoint and score doubles.
-- ISUCON13: `/api/user/:username/statistics` and `/api/livestream/:id/statistics`
-- Always profile with alp to find it
+### 2. "Single Heavy Endpoint" パターン
+通常、1 つのエンドポイントが全体の 50% 以上の時間を消費している。そのエンドポイントを修正するだけでスコアが倍になる。
+- alp でプロファイルして SUM が最大のエンドポイントを見つける
 
-### 3. The "Serve Static from nginx" Pattern
-If the app serves images/files through the application → move to nginx direct serving.
-- ISUCON13: User icons (LONGBLOB from MySQL → filesystem + nginx)
+### 3. "Serve Static from nginx" パターン
+アプリが画像/ファイルをアプリケーション経由で配信している場合 → nginx の直接配信に移行。
 
-### 4. The "Split DB and App" Pattern
-When CPU is the bottleneck on a single server:
-- Dedicated DB server gets all the RAM for buffer pool
-- App servers get all CPU for request processing
-- Typical 2-3x score improvement
+### 4. "Split DB and App" パターン
+単一サーバーで CPU がボトルネックの場合:
+- DB 専用サーバーに全 RAM を buffer pool に割り当て
+- App サーバーにリクエスト処理の全 CPU を割り当て
 
-### 5. The "Denormalize Statistics" Pattern
-Pre-compute expensive aggregations instead of calculating on every request:
+### 5. "Denormalize Statistics" パターン
+重い集計を毎リクエスト計算する代わりに、事前計算・インクリメンタル更新:
 ```sql
--- Instead of: SELECT SUM(tip) FROM livecomments WHERE livestream_id = ?
--- Maintain a running total updated on INSERT
-UPDATE livestream_stats SET total_tips = total_tips + ? WHERE livestream_id = ?
+-- 毎回: SELECT SUM(amount) FROM transactions WHERE user_id = ?
+-- 代わりに: INSERT/UPDATE 時にカウンターを更新
+UPDATE user_stats SET total_amount = total_amount + ? WHERE user_id = ?
 ```
 
-## ISUCON13-Specific Insights
+## メタ戦略
 
-### Scoring Formula
-Score = total ISUCOIN tips during 60-second load test. More successful requests = more tips = higher score.
-
-### Key Bottlenecks (in order of impact)
-1. Statistics endpoints (N+1 queries → full table scans)
-2. Icon serving (LONGBLOB from MySQL on every request)
-3. DNS resolution (PowerDNS + MySQL under water torture attack)
-4. User authentication (bcrypt + DB lookup on every request)
-
-### Competition Winner's Stack
-- 468,006 points
-- Multi-server: DB + DNS on vm1, App on vm2/vm3
-- All indexes, JOINed queries, icon caching (304)
-- Application-level user/theme cache
-- PowerDNS cache tuning
-- nginx upstream with keepalive
-
-## Meta-Strategy
-
-1. **Measure** before optimizing (alp + slow query)
-2. **Fix the biggest bottleneck** (not the easiest)
-3. **One change at a time** (isolate impact)
-4. **Validate with pretest** before full benchmark
-5. **Track score progression** (diminishing returns signal time to move to next tier)
+1. **計測してから最適化** (alp + slow query)
+2. **最大のボトルネックを修正** (最も簡単なものではなく)
+3. **一度に一つの変更** (影響を分離)
+4. **pretest で検証** してからフルベンチマーク
+5. **スコア推移を追跡** (収穫逓減 → 次のティアへ)

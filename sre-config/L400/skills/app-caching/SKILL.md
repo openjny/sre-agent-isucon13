@@ -3,88 +3,84 @@ name: app-caching
 description: Implement application-level in-memory caching in Go using sync.Map for frequently accessed data that rarely changes
 ---
 
-# Application-Level Caching — ISUPIPE
+# Application-Level Caching (Go)
 
-Cache frequently accessed, rarely changing data in Go application memory to avoid repeated MySQL queries.
+アプリケーション内のメモリキャッシュで、頻繁にアクセスされるが変更が少ないデータの DB クエリを削減する。
 
-## Cache Candidates
+## キャッシュすべきデータの見つけ方
 
-| Data | Access Pattern | Change Frequency | Cache Strategy |
-|------|---------------|------------------|----------------|
-| User info (name, display_name) | Every request (auth) | Rarely | sync.Map, invalidate on update |
-| Theme data | Every page render | Rarely | sync.Map, invalidate on update |
-| Tag list | Every livestream view | Never (static) | Load once at startup |
-| DNS zone data | Every DNS query | On user creation | sync.Map + PowerDNS notify |
+1. **アクセス頻度が高い**: 全リクエストで参照される（認証情報、設定データ等）
+2. **変更頻度が低い**: ベンチマーク中にほぼ変化しない
+3. **データサイズが小さい**: メモリに載せても問題ない
 
-## Implementation — sync.Map
+ソースコードとスローログを分析して候補を特定する。
 
-### User Cache Example
+## sync.Map を使った実装
 
-Add to `main.go`:
+### 基本パターン
 
 ```go
-var userCache sync.Map // map[int64]*UserModel
+var cache sync.Map
 
-func getUserByID(ctx context.Context, db *sqlx.DB, userID int64) (*UserModel, error) {
-    // Check cache first
-    if cached, ok := userCache.Load(userID); ok {
-        return cached.(*UserModel), nil
+func getByID(ctx context.Context, db *sqlx.DB, id int64) (*Model, error) {
+    // キャッシュチェック
+    if cached, ok := cache.Load(id); ok {
+        return cached.(*Model), nil
     }
 
-    // Cache miss — query DB
-    var user UserModel
-    if err := db.GetContext(ctx, &user, "SELECT * FROM users WHERE id = ?", userID); err != nil {
+    // キャッシュミス → DB クエリ
+    var model Model
+    if err := db.GetContext(ctx, &model, "SELECT * FROM table WHERE id = ?", id); err != nil {
         return nil, err
     }
 
-    // Store in cache
-    userCache.Store(userID, &user)
-    return &user, nil
+    // キャッシュに保存
+    cache.Store(id, &model)
+    return &model, nil
 }
 ```
 
-### Cache Invalidation
+### キャッシュの無効化
 
-Clear cache on `POST /api/initialize`:
+`POST /api/initialize` でデータリセットされる場合、キャッシュもクリアが必要:
 
 ```go
 func initializeHandler(c echo.Context) error {
-    userCache = sync.Map{}   // Reset all caches
-    themeCache = sync.Map{}
-    tagCache = nil
-    // ... existing init logic
+    cache = sync.Map{}   // 全キャッシュをリセット
+    // ... 既存の初期化ロジック
 }
 ```
 
-### Tag Cache (Static Data)
+更新 API がある場合は、更新時にもキャッシュを無効化:
 
 ```go
-var tagCache []TagModel
-
-func getTagsHandler(c echo.Context) error {
-    if tagCache != nil {
-        return c.JSON(http.StatusOK, &TagsResponse{Tags: tagCache})
-    }
-    // Load from DB and cache
-    var tags []TagModel
-    db.SelectContext(ctx, &tags, "SELECT * FROM tags")
-    tagCache = tags
-    return c.JSON(http.StatusOK, &TagsResponse{Tags: tags})
+func updateHandler(c echo.Context) error {
+    // ... DB 更新
+    cache.Delete(id)  // または cache.Store(id, &updatedModel) で更新
 }
 ```
 
-## Alternative: TTL Cache with expiration
+### 静的データのキャッシュ
 
-For data that may change during the benchmark:
+ベンチマーク中に一切変更されないマスタデータは起動時にロード:
+
+```go
+var masterData []Item
+
+func loadMasterData(db *sqlx.DB) {
+    db.Select(&masterData, "SELECT * FROM master_table")
+}
+```
+
+## TTL 付きキャッシュ
+
+変更される可能性があるデータには TTL（有効期限）を設定:
 
 ```go
 type CacheEntry struct {
     Value     interface{}
     ExpiresAt time.Time
 }
-
-// Simple TTL cache
-var cache sync.Map
 
 func getCached(key string, ttl time.Duration, fetch func() (interface{}, error)) (interface{}, error) {
     if entry, ok := cache.Load(key); ok {
@@ -99,8 +95,8 @@ func getCached(key string, ttl time.Duration, fetch func() (interface{}, error))
 }
 ```
 
-## Expected Impact
+## 注意点
 
-- Eliminates repeated user/theme queries (often 50%+ of all queries)
-- Tag cache eliminates a full table scan per request
-- Typical improvement: +5,000-15,000 score
+- マルチサーバー構成の場合、各サーバーのキャッシュが不整合になる可能性がある
+- キャッシュ更新の反映遅延がベンチマーカーの許容範囲内であることを確認
+- メモリ使用量に注意（大量の画像データ等はキャッシュしない）

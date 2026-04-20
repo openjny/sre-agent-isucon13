@@ -3,59 +3,53 @@ name: go-db-tuning
 description: Tune Go database/sql connection pool settings for optimal MySQL performance under ISUCON load
 ---
 
-# Go DB Connection Pool Tuning — ISUPIPE
+# Go DB Connection Pool Tuning
 
-The default Go `database/sql` connection pool settings are not optimal for ISUCON workloads.
+Go の `database/sql` パッケージのデフォルト設定は ISUCON のような高負荷ワークロードに最適化されていない。接続プールの設定を調整する。
 
-## Key Settings
+## 主要設定
 
-Add these after `sql.Open()` in the Go app (typically in `main.go`):
-
-```go
-db.SetMaxOpenConns(25)       // Max simultaneous connections (default: unlimited)
-db.SetMaxIdleConns(25)       // Keep connections warm (default: 2)
-db.SetConnMaxLifetime(0)     // No max lifetime (reuse connections)
-db.SetConnMaxIdleTime(0)     // No idle timeout
-```
-
-## Why These Values
-
-| Setting | Default | Recommended | Reason |
-|---------|---------|-------------|--------|
-| MaxOpenConns | ∞ | 25 | Prevents MySQL connection exhaustion (default max_connections=151) |
-| MaxIdleConns | 2 | = MaxOpenConns | Avoids connection churn (creating new connections per request) |
-| ConnMaxLifetime | ∞ | 0 | No need to rotate in ISUCON (short-lived benchmark) |
-
-## Finding the db.Open() Call
-
-```bash
-exec host="vm1" command="grep -n 'sql.Open\|db.Set' /home/isucon/isucon13/webapp/go/main.go"
-```
-
-## Applying the Change
-
-```bash
-exec host="vm1" command="cd /home/isucon/isucon13/webapp/go && sed -i '/sql.Open/a\\tdb.SetMaxOpenConns(25)\n\tdb.SetMaxIdleConns(25)\n\tdb.SetConnMaxLifetime(0)' main.go"
-```
-
-Then rebuild and restart:
-```bash
-exec host="vm1" command="cd /home/isucon/isucon13/webapp/go && go build -o isupipe . && sudo systemctl restart isupipe-go"
-```
-
-## Prepared Statements
-
-If the app uses `db.Prepare()` extensively, consider switching to `interpolateParams=true` in the DSN to reduce round-trips:
+`sql.Open()` の直後に以下を追加:
 
 ```go
-// Add to DSN: ?interpolateParams=true
-dsn := "isucon:isucon@tcp(127.0.0.1:3306)/isupipe?parseTime=true&interpolateParams=true"
+db.SetMaxOpenConns(25)       // 同時接続数の上限 (デフォルト: 無制限)
+db.SetMaxIdleConns(25)       // アイドル接続の保持数 (デフォルト: 2)
+db.SetConnMaxLifetime(0)     // 接続の最大寿命 (0 = 無制限)
+db.SetConnMaxIdleTime(0)     // アイドルタイムアウト (0 = 無制限)
 ```
 
-This sends the full SQL in one packet instead of prepare→execute→close (3 round-trips).
+## 各設定の意味
 
-## Expected Impact
+| 設定 | デフォルト | 推奨値 | 理由 |
+|------|-----------|--------|------|
+| MaxOpenConns | ∞ | 25 | MySQL のmax_connections を超えないようにする |
+| MaxIdleConns | 2 | = MaxOpenConns | コネクション再作成のオーバーヘッドを回避 |
+| ConnMaxLifetime | ∞ | 0 | ベンチ中は接続ローテーション不要 |
 
-- Eliminates connection churn under load
-- Reduces "too many connections" errors
-- Typical improvement: +1,000-3,000 score
+### MaxOpenConns の決め方
+
+- MySQL のデフォルト `max_connections` は 151
+- 複数サーバーからの接続を考慮: `max_connections / サーバー数` 程度
+- 少なすぎると待ち行列が発生、多すぎると MySQL が過負荷
+
+## Prepared Statements の最適化
+
+`db.Prepare()` を使っている場合、`interpolateParams=true` を DSN に追加すると round-trip を削減できる:
+
+```go
+// 3 round-trip (Prepare → Execute → Close) → 1 round-trip に
+dsn := "user:password@tcp(host:3306)/dbname?parseTime=true&interpolateParams=true"
+```
+
+## 確認方法
+
+```bash
+# Go ソースで sql.Open を探す
+grep -n 'sql.Open\|db.Set' /path/to/webapp/go/*.go
+```
+
+## 効果
+
+- 高負荷時の "too many connections" エラーを防止
+- コネクション再作成のオーバーヘッドを排除
+- アイドル接続の再利用でレイテンシ改善
