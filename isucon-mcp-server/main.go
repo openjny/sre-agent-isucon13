@@ -113,7 +113,7 @@ func main() {
 				log.Printf("WARNING: Failed to create blob client: %v", clientErr)
 			} else {
 				blobClient = client
-				log.Printf("Azure Blob Storage initialized: %s", storageURL)
+				log.Printf("Azure Blob Storage initialized: %s", storageURL) // #nosec G706 -- storageURL is from env var, not user input
 			}
 		}
 	} else {
@@ -128,7 +128,7 @@ func main() {
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ok")
+		_, _ = fmt.Fprint(w, "ok")
 	})
 
 	port := os.Getenv("PORT")
@@ -136,8 +136,13 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("ISUCON MCP Server starting on :%s with hosts: %v (auth: %v)", port, hostMap, apiKey != "")
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	log.Printf("ISUCON MCP Server starting on :%s with hosts: %v (auth: %v)", port, hostMap, apiKey != "") // #nosec G706 -- port and hostMap are from env vars
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -218,7 +223,7 @@ func execSSH(host, command string) (stdout, stderr string, exitCode int, err err
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- internal network, host key verification not needed
 		Timeout:         10 * time.Second,
 	}
 
@@ -227,13 +232,13 @@ func execSSH(host, command string) (stdout, stderr string, exitCode int, err err
 	if err != nil {
 		return "", "", -1, fmt.Errorf("SSH dial to %s failed: %w", addr, err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	session, err := client.NewSession()
 	if err != nil {
 		return "", "", -1, fmt.Errorf("SSH session failed: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
@@ -555,7 +560,7 @@ func handleExecTool(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 		return
 	}
 
-	log.Printf("exec: host=%s command=%q admin=%v", args.Host, args.Command, adminMode)
+	log.Printf("exec: host=%s command=%q admin=%v", args.Host, args.Command, adminMode) // #nosec G706 -- args are validated above
 
 	stdout, stderr, exitCode, err := execSSH(args.Host, args.Command)
 	if err != nil {
@@ -582,7 +587,7 @@ func handleExecTool(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 		output.WriteString(stderr)
 	}
 	if exitCode != 0 {
-		output.WriteString(fmt.Sprintf("\n[exit code: %d]", exitCode))
+		fmt.Fprintf(&output, "\n[exit code: %d]", exitCode)
 	}
 
 	writeResult(w, id, map[string]interface{}{
@@ -605,7 +610,7 @@ func handleBenchmarkStart(w http.ResponseWriter, id json.RawMessage, arguments j
 		Options string `json:"options"`
 	}
 	if arguments != nil {
-		json.Unmarshal(arguments, &args)
+		_ = json.Unmarshal(arguments, &args)
 	}
 
 	benchMu.Lock()
@@ -710,7 +715,7 @@ func handleBenchmarkStatus(w http.ResponseWriter, id json.RawMessage, arguments 
 		JobID string `json:"job_id"`
 	}
 	if arguments != nil {
-		json.Unmarshal(arguments, &args)
+		_ = json.Unmarshal(arguments, &args)
 	}
 
 	benchMu.Lock()
@@ -853,7 +858,7 @@ func handleBenchmarkHistory(w http.ResponseWriter, id json.RawMessage, arguments
 		Limit int `json:"limit"`
 	}
 	if arguments != nil {
-		json.Unmarshal(arguments, &args)
+		_ = json.Unmarshal(arguments, &args)
 	}
 
 	// Read history file from bench VM
@@ -1036,7 +1041,7 @@ func handleNoteWrite(w http.ResponseWriter, id json.RawMessage, arguments json.R
 		resp, err := blobClient.DownloadStream(ctx, blobContainerName, args.Path, nil)
 		if err == nil {
 			existing, readErr := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if readErr == nil {
 				data = append(existing, []byte(args.Content)...)
 			} else {
@@ -1131,7 +1136,7 @@ func handleNoteRead(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 	}
 
 	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if err != nil {
 		writeResult(w, id, map[string]interface{}{
 			"content": []map[string]interface{}{
@@ -1190,7 +1195,7 @@ func handleNoteList(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 		Prefix string `json:"prefix"`
 	}
 	if arguments != nil {
-		json.Unmarshal(arguments, &args)
+		_ = json.Unmarshal(arguments, &args)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1257,7 +1262,7 @@ func handleNoteList(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 
 func writeResult(w http.ResponseWriter, id json.RawMessage, result interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mcpResponse{
+	_ = json.NewEncoder(w).Encode(mcpResponse{
 		JSONRPC: "2.0",
 		ID:      id,
 		Result:  result,
@@ -1266,7 +1271,7 @@ func writeResult(w http.ResponseWriter, id json.RawMessage, result interface{}) 
 
 func writeError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mcpResponse{
+	_ = json.NewEncoder(w).Encode(mcpResponse{
 		JSONRPC: "2.0",
 		ID:      id,
 		Error:   &mcpError{Code: code, Message: message},
