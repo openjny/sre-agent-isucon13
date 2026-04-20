@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/lib/sreagent-common.sh"
 
 # Parse arguments
 ENABLE_WATCH=false
-INTERVAL=5
+INTERVAL=10
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,7 +45,7 @@ if [ -n "$TRIGGER_ID" ]; then
   echo "📌 Trigger already exists: $TRIGGER_ID"
 else
   echo "🚀 Creating contest trigger..."
-  CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から60分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
+  CONTEST_PROMPT="ISUCON の競技を開始してください。制限時間は今から120分です。その間は何回でもベンチマークを走らせて良いですが、最後に回したベンチマークのスコアがあなたの得点になります。"
   TRIGGER_ID=$($SRECTL -o json trigger create --name start-contest --prompt "$CONTEST_PROMPT" --agent isucon 2>/dev/null \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('triggerId',''))" 2>/dev/null)
   if [ -z "$TRIGGER_ID" ]; then
