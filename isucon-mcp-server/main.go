@@ -802,21 +802,25 @@ func handleBenchmarkStatus(w http.ResponseWriter, id json.RawMessage, arguments 
 }
 
 // parseScore extracts the score from benchmark output.
-// It looks for patterns like "score: 3600" or "Score: 3600".
+// It looks for patterns like "score: 3600", "Score: 3600", or "スコア: 3600".
 func parseScore(output string) (int, bool) {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		lower := strings.ToLower(line)
-		if strings.Contains(lower, "score") {
-			// Try to find a number after "score"
-			idx := strings.Index(lower, "score")
-			rest := line[idx:]
-			var score int
-			// Try "score: 1234" or "score=1234" patterns
-			for _, sep := range []string{": ", ":", "= ", "="} {
-				if n, err := fmt.Sscanf(rest[len("score"):], sep+"%d", &score); n == 1 && err == nil {
-					return score, true
-				}
+		// Check for Japanese "スコア" or English "score"
+		var rest string
+		if idx := strings.Index(line, "スコア"); idx >= 0 {
+			rest = line[idx+len("スコア"):]
+		} else if idx := strings.Index(lower, "score"); idx >= 0 {
+			rest = line[idx+len("score"):]
+		} else {
+			continue
+		}
+		var score int
+		// Try ": 1234", ":1234", "= 1234", "=1234" patterns
+		for _, sep := range []string{": ", ":", "= ", "="} {
+			if n, err := fmt.Sscanf(rest, sep+"%d", &score); n == 1 && err == nil {
+				return score, true
 			}
 		}
 	}
