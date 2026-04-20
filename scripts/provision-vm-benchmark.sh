@@ -39,6 +39,15 @@ if [[ -d $BENCH_DIR ]]; then
 		# Try make if available
 		sudo -u isucon -E bash -c "export HOME=/home/isucon && export GOPATH=/home/isucon/go && export GOMODCACHE=/home/isucon/go/pkg/mod && export PATH=/usr/local/go/bin:\$PATH && cd $BENCH_DIR && make" 2>/dev/null || true
 	fi
+	# Keep only the built binary; remove source to prevent cheating
+	BENCH_BIN="$BENCH_DIR/bin/bench_linux_amd64"
+	if [[ -f $BENCH_BIN ]]; then
+		mv "$BENCH_BIN" /home/isucon/bench_linux_amd64
+		rm -rf "$ISUCON_DIR"
+		mkdir -p "$BENCH_DIR/bin"
+		mv /home/isucon/bench_linux_amd64 "$BENCH_BIN"
+		chown -R isucon:isucon "$ISUCON_DIR"
+	fi
 fi
 
 # ============================================================

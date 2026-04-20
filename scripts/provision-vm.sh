@@ -114,6 +114,15 @@ fi
 ISUCON_DIR="/home/isucon/isucon13"
 if [[ ! -d $ISUCON_DIR ]]; then
 	git clone --depth 1 https://github.com/isucon/isucon13.git "$ISUCON_DIR"
+	# Remove directories that weren't available to contestants on competition day.
+	# bench/ contains scoring logic, validated/ has winning team diffs, etc.
+	rm -rf "$ISUCON_DIR/bench" \
+		"$ISUCON_DIR/validated" \
+		"$ISUCON_DIR/scripts" \
+		"$ISUCON_DIR/provisioning" \
+		"$ISUCON_DIR/development" \
+		"$ISUCON_DIR/frontend" \
+		"$ISUCON_DIR/.github"
 	chown -R isucon:isucon "$ISUCON_DIR"
 fi
 
