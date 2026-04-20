@@ -23,6 +23,9 @@ param hostMapJson string
 @secure()
 param mcpApiKey string
 
+@description('Storage account name for agent notes')
+param storageAccountName string
+
 // ============================================================
 // Managed Identity for ACA
 // ============================================================
@@ -63,6 +66,26 @@ resource kvSecretsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
+    principalId: acaIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// ============================================================
+// Storage Blob Data Contributor for ACA identity (notes)
+// ============================================================
+
+resource notesStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: storageAccountName
+}
+
+var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+
+resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(notesStorage.id, acaIdentity.id, storageBlobDataContributorRoleId)
+  scope: notesStorage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
     principalId: acaIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -144,6 +167,7 @@ resource mcpApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'SSH_KEY_SECRET_NAME', value: sshKeySecretName }
             { name: 'AZURE_CLIENT_ID', value: acaIdentity.properties.clientId }
             { name: 'API_KEY', secretRef: 'mcp-api-key' }
+            { name: 'AZURE_STORAGE_ACCOUNT_URL', value: 'https://${notesStorage.name}.blob.${environment().suffixes.storage}' }
           ]
         }
       ]

@@ -62,7 +62,7 @@ echo "🔗 Creating MCP connector..."
 MCP_FQDN=$(azd env get-value ISUCON_MCP_FQDN 2>/dev/null || echo "")
 MCP_API_KEY=$(azd env get-value ISUCON_MCP_API_KEY 2>/dev/null || echo "")
 if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
-  $SRECTL mcp add --name isucon-mcp --url "https://${MCP_FQDN}/mcp" --header "X-API-Key=${MCP_API_KEY}"
+  $SRECTL mcp add --name isucon-mcp --url "https://${MCP_FQDN}/mcp" --header "X-API-Key=${MCP_API_KEY}" --header "X-Admin-Mode=true"
 else
   echo "   ⚠️  ISUCON_MCP_FQDN or ISUCON_MCP_API_KEY not set"
 fi

@@ -17,7 +17,8 @@
       "type": "http",
       "url": "https://${input:mcp-fqdn}/mcp",
       "headers": {
-        "Authorization": "Bearer ${input:mcp-api-key}"
+        "Authorization": "Bearer ${input:mcp-api-key}",
+        "X-Admin-Mode": "true"
       }
     }
   }

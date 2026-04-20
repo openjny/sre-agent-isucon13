@@ -5,16 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -38,6 +42,15 @@ var benchHost string
 
 // benchCommand is the command to run the benchmark.
 var benchCommand string
+
+// blobClient is the Azure Blob Storage client for notes.
+var blobClient *azblob.Client
+
+// blobContainerName is the container name for notes.
+const blobContainerName = "notes"
+
+// benchHistoryFile is the path on bench VM where benchmark history is stored.
+const benchHistoryFile = "/home/isucon/benchmark-history.jsonl"
 
 // ============================================================
 // Benchmark job tracking
@@ -87,6 +100,24 @@ func main() {
 	benchCommand = os.Getenv("BENCH_COMMAND")
 	if benchCommand == "" {
 		benchCommand = "sudo -u isucon /home/isucon/run-benchmark.sh"
+	}
+
+	// Initialize Azure Blob Storage client for notes
+	if storageURL := os.Getenv("AZURE_STORAGE_ACCOUNT_URL"); storageURL != "" {
+		cred, credErr := azidentity.NewDefaultAzureCredential(nil)
+		if credErr != nil {
+			log.Printf("WARNING: Failed to create Azure credential for storage: %v", credErr)
+		} else {
+			client, clientErr := azblob.NewClient(storageURL, cred, nil)
+			if clientErr != nil {
+				log.Printf("WARNING: Failed to create blob client: %v", clientErr)
+			} else {
+				blobClient = client
+				log.Printf("Azure Blob Storage initialized: %s", storageURL)
+			}
+		}
+	} else {
+		log.Println("WARNING: AZURE_STORAGE_ACCOUNT_URL not set, note tools will be unavailable")
 	}
 
 	mux := http.NewServeMux()
@@ -284,6 +315,9 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine admin mode from X-Admin-Mode header
+	adminMode := strings.EqualFold(r.Header.Get("X-Admin-Mode"), "true")
+
 	switch req.Method {
 	case "initialize":
 		handleInitialize(w, &req)
@@ -295,9 +329,9 @@ func handleMCP(w http.ResponseWriter, r *http.Request) {
 		// SRE Agent sends ping for health checks — return empty result
 		writeResult(w, req.ID, map[string]interface{}{})
 	case "tools/list":
-		handleToolsList(w, &req)
+		handleToolsList(w, &req, adminMode)
 	case "tools/call":
-		handleToolsCall(w, &req)
+		handleToolsCall(w, &req, adminMode)
 	default:
 		writeError(w, req.ID, -32601, fmt.Sprintf("Method not found: %s", req.Method))
 	}
@@ -311,64 +345,152 @@ func handleInitialize(w http.ResponseWriter, req *mcpRequest) {
 		},
 		"serverInfo": map[string]interface{}{
 			"name":    "isucon-mcp-server",
-			"version": "0.2.0",
+			"version": "0.3.0",
 		},
 	})
 }
 
-func handleToolsList(w http.ResponseWriter, req *mcpRequest) {
+func handleToolsList(w http.ResponseWriter, req *mcpRequest, adminMode bool) {
+	// Build host list based on admin mode
 	hosts := make([]string, 0, len(hostMap))
 	for k := range hostMap {
+		if !adminMode && k == benchHost {
+			continue // hide bench from non-admin
+		}
 		hosts = append(hosts, k)
 	}
+	sort.Strings(hosts)
 
-	writeResult(w, req.ID, map[string]interface{}{
-		"tools": []map[string]interface{}{
-			{
-				"name":        "exec",
-				"description": fmt.Sprintf("Execute a shell command on a remote host via SSH. Available hosts: %s", strings.Join(hosts, ", ")),
-				"inputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"host": map[string]interface{}{
-							"type":        "string",
-							"description": fmt.Sprintf("Target host alias (%s) or private IP", strings.Join(hosts, ", ")),
-						},
-						"command": map[string]interface{}{
-							"type":        "string",
-							"description": "Shell command to execute",
-						},
+	execDesc := fmt.Sprintf("Execute a shell command on a remote host via SSH. Available hosts: %s", strings.Join(hosts, ", "))
+	if !adminMode {
+		execDesc += fmt.Sprintf(". Note: %s (benchmark VM) is not available in non-admin mode.", benchHost)
+	}
+
+	tools := []map[string]interface{}{
+		{
+			"name":        "exec",
+			"description": execDesc,
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"host": map[string]interface{}{
+						"type":        "string",
+						"description": fmt.Sprintf("Target host alias (%s) or private IP", strings.Join(hosts, ", ")),
 					},
-					"required": []string{"host", "command"},
-				},
-			},
-			{
-				"name":        "benchmark_start",
-				"description": "Start an ISUCON benchmark run asynchronously. Returns a job ID. Only one benchmark can run at a time.",
-				"inputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"options": map[string]interface{}{
-							"type":        "string",
-							"description": "Additional options for the benchmark (e.g., '--pretest-only' for validation without load test)",
-						},
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "Shell command to execute",
 					},
 				},
+				"required": []string{"host", "command"},
 			},
-			{
-				"name":        "benchmark_status",
-				"description": "Check the status of a benchmark job. Returns score and output when completed.",
-				"inputSchema": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"job_id": map[string]interface{}{
-							"type":        "string",
-							"description": "Benchmark job ID returned by benchmark_start. If omitted, returns the latest job.",
-						},
+		},
+		{
+			"name":        "benchmark_start",
+			"description": "Start an ISUCON benchmark run asynchronously. Returns a job ID. Only one benchmark can run at a time.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"options": map[string]interface{}{
+						"type":        "string",
+						"description": "Additional options for the benchmark (e.g., '--pretest-only' for validation without load test)",
 					},
 				},
 			},
 		},
+		{
+			"name":        "benchmark_status",
+			"description": "Check the status of a benchmark job. Returns score and output when completed.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"job_id": map[string]interface{}{
+						"type":        "string",
+						"description": "Benchmark job ID returned by benchmark_start. If omitted, returns the latest job.",
+					},
+				},
+			},
+		},
+		{
+			"name":        "benchmark_history",
+			"description": "View benchmark run history with scores. Shows a table of past runs and best/worst scores across all runs.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "Maximum number of recent runs to display. Defaults to all (up to 50).",
+					},
+				},
+			},
+		},
+	}
+
+	// Add note tools only if storage is configured
+	if blobClient != nil {
+		tools = append(tools,
+			map[string]interface{}{
+				"name":        "note_write",
+				"description": "Write or append text to a note. Use for recording findings, changes, and building reports.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Note file path (e.g., 'report.md', 'logs/attempt-1.txt')",
+						},
+						"content": map[string]interface{}{
+							"type":        "string",
+							"description": "Text content to write",
+						},
+						"append": map[string]interface{}{
+							"type":        "boolean",
+							"description": "If true, append to existing note instead of overwriting. Default: false",
+						},
+					},
+					"required": []string{"path", "content"},
+				},
+			},
+			map[string]interface{}{
+				"name":        "note_read",
+				"description": "Read the contents of a note.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "Note file path to read",
+						},
+						"head": map[string]interface{}{
+							"type":        "integer",
+							"description": "Return only the first N lines",
+						},
+						"tail": map[string]interface{}{
+							"type":        "integer",
+							"description": "Return only the last N lines",
+						},
+					},
+					"required": []string{"path"},
+				},
+			},
+			map[string]interface{}{
+				"name":        "note_list",
+				"description": "List all notes. Optionally filter by path prefix.",
+				"inputSchema": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"prefix": map[string]interface{}{
+							"type":        "string",
+							"description": "Filter notes by path prefix (e.g., 'logs/')",
+						},
+					},
+				},
+			},
+		)
+	}
+
+	writeResult(w, req.ID, map[string]interface{}{
+		"tools": tools,
 	})
 }
 
@@ -377,7 +499,7 @@ type execParams struct {
 	Command string `json:"command"`
 }
 
-func handleToolsCall(w http.ResponseWriter, req *mcpRequest) {
+func handleToolsCall(w http.ResponseWriter, req *mcpRequest, adminMode bool) {
 	var params struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
@@ -389,17 +511,25 @@ func handleToolsCall(w http.ResponseWriter, req *mcpRequest) {
 
 	switch params.Name {
 	case "exec":
-		handleExecTool(w, req.ID, params.Arguments)
+		handleExecTool(w, req.ID, params.Arguments, adminMode)
 	case "benchmark_start":
 		handleBenchmarkStart(w, req.ID, params.Arguments)
 	case "benchmark_status":
 		handleBenchmarkStatus(w, req.ID, params.Arguments)
+	case "benchmark_history":
+		handleBenchmarkHistory(w, req.ID, params.Arguments)
+	case "note_write":
+		handleNoteWrite(w, req.ID, params.Arguments)
+	case "note_read":
+		handleNoteRead(w, req.ID, params.Arguments)
+	case "note_list":
+		handleNoteList(w, req.ID, params.Arguments)
 	default:
 		writeError(w, req.ID, -32602, fmt.Sprintf("Unknown tool: %s", params.Name))
 	}
 }
 
-func handleExecTool(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage) {
+func handleExecTool(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage, adminMode bool) {
 	var args execParams
 	if err := json.Unmarshal(arguments, &args); err != nil {
 		writeError(w, id, -32602, "Invalid exec arguments")
@@ -411,7 +541,21 @@ func handleExecTool(w http.ResponseWriter, id json.RawMessage, arguments json.Ra
 		return
 	}
 
-	log.Printf("exec: host=%s command=%q", args.Host, args.Command)
+	// Admin mode check: only admin can exec on bench VM
+	if args.Host == benchHost && !adminMode {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": fmt.Sprintf("Error: exec on %s (benchmark VM) requires admin mode. Use contest VMs (vm1, vm2, vm3) instead.", benchHost),
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	log.Printf("exec: host=%s command=%q admin=%v", args.Host, args.Command, adminMode)
 
 	stdout, stderr, exitCode, err := execSSH(args.Host, args.Command)
 	if err != nil {
@@ -503,7 +647,6 @@ func handleBenchmarkStart(w http.ResponseWriter, id json.RawMessage, arguments j
 
 		now := time.Now()
 		benchMu.Lock()
-		defer benchMu.Unlock()
 
 		job.EndedAt = &now
 		benchRunning = false
@@ -512,6 +655,8 @@ func handleBenchmarkStart(w http.ResponseWriter, id json.RawMessage, arguments j
 			job.Status = "failed"
 			job.Error = err.Error()
 			log.Printf("benchmark_start: job_id=%s failed: %v", jobID, err)
+			benchMu.Unlock()
+			appendBenchmarkHistory(job)
 			return
 		}
 
@@ -544,6 +689,10 @@ func handleBenchmarkStart(w http.ResponseWriter, id json.RawMessage, arguments j
 		}
 
 		log.Printf("benchmark_start: job_id=%s status=%s score=%v", jobID, job.Status, job.Score)
+		benchMu.Unlock()
+
+		// Persist history to bench VM (best-effort)
+		appendBenchmarkHistory(job)
 	}()
 
 	writeResult(w, id, map[string]interface{}{
@@ -667,6 +816,443 @@ func parseScore(output string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+// ============================================================
+// Benchmark history
+// ============================================================
+
+// appendBenchmarkHistory persists a benchmark result to the bench VM.
+// This is best-effort — failures are logged but don't affect the benchmark result.
+func appendBenchmarkHistory(job *benchmarkJob) {
+	scoreStr := "null"
+	if job.Score != nil {
+		scoreStr = strconv.Itoa(*job.Score)
+	}
+	passedStr := "null"
+	if job.Passed != nil {
+		passedStr = strconv.FormatBool(*job.Passed)
+	}
+	endedAtStr := ""
+	if job.EndedAt != nil {
+		endedAtStr = job.EndedAt.Format(time.RFC3339)
+	}
+
+	record := fmt.Sprintf(`{"job_id":"%s","status":"%s","score":%s,"passed":%s,"started_at":"%s","ended_at":"%s"}`,
+		job.ID, job.Status, scoreStr, passedStr, job.StartedAt.Format(time.RFC3339), endedAtStr)
+
+	cmd := fmt.Sprintf("echo '%s' >> %s", record, benchHistoryFile)
+	_, _, _, err := execSSH(benchHost, cmd)
+	if err != nil {
+		log.Printf("WARNING: Failed to append benchmark history: %v", err)
+	}
+}
+
+func handleBenchmarkHistory(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage) {
+	var args struct {
+		Limit int `json:"limit"`
+	}
+	if arguments != nil {
+		json.Unmarshal(arguments, &args)
+	}
+
+	// Read history file from bench VM
+	stdout, _, _, err := execSSH(benchHost, fmt.Sprintf("cat %s 2>/dev/null || echo ''", benchHistoryFile))
+	if err != nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": fmt.Sprintf("Error reading benchmark history: %v", err),
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	type historyEntry struct {
+		JobID     string `json:"job_id"`
+		Status    string `json:"status"`
+		Score     *int   `json:"score"`
+		Passed    *bool  `json:"passed"`
+		StartedAt string `json:"started_at"`
+		EndedAt   string `json:"ended_at"`
+	}
+
+	var entries []historyEntry
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry historyEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue // skip malformed lines
+		}
+		entries = append(entries, entry)
+	}
+
+	if len(entries) == 0 {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "No benchmark history found. Run benchmark_start to create history.",
+				},
+			},
+		})
+		return
+	}
+
+	// Sort by started_at descending (newest first)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].StartedAt > entries[j].StartedAt
+	})
+
+	totalRuns := len(entries)
+
+	// Find best/worst across ALL runs
+	var bestScore, worstScore int
+	var bestJobID, worstJobID string
+	bestInitialized := false
+	for _, e := range entries {
+		if e.Score != nil {
+			if !bestInitialized {
+				bestScore = *e.Score
+				worstScore = *e.Score
+				bestJobID = e.JobID
+				worstJobID = e.JobID
+				bestInitialized = true
+			} else {
+				if *e.Score > bestScore {
+					bestScore = *e.Score
+					bestJobID = e.JobID
+				}
+				if *e.Score < worstScore {
+					worstScore = *e.Score
+					worstJobID = e.JobID
+				}
+			}
+		}
+	}
+
+	// Apply limit
+	displayEntries := entries
+	if args.Limit > 0 && args.Limit < len(entries) {
+		displayEntries = entries[:args.Limit]
+	}
+
+	var text strings.Builder
+	if args.Limit > 0 && args.Limit < totalRuns {
+		fmt.Fprintf(&text, "=== Benchmark History (latest %d of %d runs) ===\n\n", len(displayEntries), totalRuns)
+	} else {
+		fmt.Fprintf(&text, "=== Benchmark History (%d runs) ===\n\n", totalRuns)
+	}
+
+	// Table header
+	fmt.Fprintf(&text, "%-4s %-18s %8s %8s %-22s %10s\n", "#", "job_id", "score", "passed", "started_at", "duration")
+	for i, e := range displayEntries {
+		scoreStr := "-"
+		if e.Score != nil {
+			scoreStr = strconv.Itoa(*e.Score)
+		}
+		passedStr := "-"
+		if e.Passed != nil {
+			passedStr = strconv.FormatBool(*e.Passed)
+		}
+		durationStr := "-"
+		if e.StartedAt != "" && e.EndedAt != "" {
+			if st, err1 := time.Parse(time.RFC3339, e.StartedAt); err1 == nil {
+				if et, err2 := time.Parse(time.RFC3339, e.EndedAt); err2 == nil {
+					durationStr = et.Sub(st).Round(time.Second).String()
+				}
+			}
+		}
+		fmt.Fprintf(&text, "%-4d %-18s %8s %8s %-22s %10s\n", i+1, e.JobID, scoreStr, passedStr, e.StartedAt, durationStr)
+	}
+
+	if bestInitialized {
+		fmt.Fprintf(&text, "\nAll %d runs — Best: %d (%s), Worst: %d (%s)\n", totalRuns, bestScore, bestJobID, worstScore, worstJobID)
+	}
+
+	writeResult(w, id, map[string]interface{}{
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": text.String(),
+			},
+		},
+	})
+}
+
+// ============================================================
+// Note tools (Azure Blob Storage)
+// ============================================================
+
+func handleNoteWrite(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage) {
+	if blobClient == nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "Error: Note storage is not configured. Set AZURE_STORAGE_ACCOUNT_URL.",
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	var args struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+		Append  bool   `json:"append"`
+	}
+	if err := json.Unmarshal(arguments, &args); err != nil {
+		writeError(w, id, -32602, "Invalid note_write arguments")
+		return
+	}
+
+	if args.Path == "" || args.Content == "" {
+		writeError(w, id, -32602, "path and content are required")
+		return
+	}
+
+	// Sanitize path
+	args.Path = strings.TrimPrefix(args.Path, "/")
+	if strings.Contains(args.Path, "..") {
+		writeError(w, id, -32602, "path must not contain '..'")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var data []byte
+	if args.Append {
+		// Download existing content first
+		resp, err := blobClient.DownloadStream(ctx, blobContainerName, args.Path, nil)
+		if err == nil {
+			existing, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr == nil {
+				data = append(existing, []byte(args.Content)...)
+			} else {
+				data = []byte(args.Content)
+			}
+		} else {
+			// Blob doesn't exist yet, just write new content
+			data = []byte(args.Content)
+		}
+	} else {
+		data = []byte(args.Content)
+	}
+
+	_, err := blobClient.UploadBuffer(ctx, blobContainerName, args.Path, data, nil)
+	if err != nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": fmt.Sprintf("Error writing note: %v", err),
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	writeResult(w, id, map[string]interface{}{
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": fmt.Sprintf("Saved to %s (%d bytes)", args.Path, len(data)),
+			},
+		},
+	})
+}
+
+func handleNoteRead(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage) {
+	if blobClient == nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "Error: Note storage is not configured. Set AZURE_STORAGE_ACCOUNT_URL.",
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	var args struct {
+		Path string `json:"path"`
+		Head int    `json:"head"`
+		Tail int    `json:"tail"`
+	}
+	if err := json.Unmarshal(arguments, &args); err != nil {
+		writeError(w, id, -32602, "Invalid note_read arguments")
+		return
+	}
+
+	if args.Path == "" {
+		writeError(w, id, -32602, "path is required")
+		return
+	}
+	if args.Head > 0 && args.Tail > 0 {
+		writeError(w, id, -32602, "head and tail are mutually exclusive")
+		return
+	}
+
+	args.Path = strings.TrimPrefix(args.Path, "/")
+	if strings.Contains(args.Path, "..") {
+		writeError(w, id, -32602, "path must not contain '..'")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := blobClient.DownloadStream(ctx, blobContainerName, args.Path, nil)
+	if err != nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": fmt.Sprintf("Error reading note: %v", err),
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": fmt.Sprintf("Error reading note body: %v", err),
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	content := string(body)
+
+	// Apply head/tail line filtering
+	if args.Head > 0 || args.Tail > 0 {
+		lines := strings.Split(content, "\n")
+		if args.Head > 0 {
+			if args.Head < len(lines) {
+				lines = lines[:args.Head]
+			}
+		} else if args.Tail > 0 {
+			if args.Tail < len(lines) {
+				lines = lines[len(lines)-args.Tail:]
+			}
+		}
+		content = strings.Join(lines, "\n")
+	}
+
+	writeResult(w, id, map[string]interface{}{
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": content,
+			},
+		},
+	})
+}
+
+func handleNoteList(w http.ResponseWriter, id json.RawMessage, arguments json.RawMessage) {
+	if blobClient == nil {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "Error: Note storage is not configured. Set AZURE_STORAGE_ACCOUNT_URL.",
+				},
+			},
+			"isError": true,
+		})
+		return
+	}
+
+	var args struct {
+		Prefix string `json:"prefix"`
+	}
+	if arguments != nil {
+		json.Unmarshal(arguments, &args)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	opts := &azblob.ListBlobsFlatOptions{}
+	if args.Prefix != "" {
+		opts.Prefix = &args.Prefix
+	}
+	pager := blobClient.NewListBlobsFlatPager(blobContainerName, opts)
+
+	var text strings.Builder
+	count := 0
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			writeResult(w, id, map[string]interface{}{
+				"content": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": fmt.Sprintf("Error listing notes: %v", err),
+					},
+				},
+				"isError": true,
+			})
+			return
+		}
+		for _, blob := range page.Segment.BlobItems {
+			size := int64(0)
+			if blob.Properties.ContentLength != nil {
+				size = *blob.Properties.ContentLength
+			}
+			lastMod := ""
+			if blob.Properties.LastModified != nil {
+				lastMod = blob.Properties.LastModified.Format(time.RFC3339)
+			}
+			fmt.Fprintf(&text, "%-40s %8d bytes  %s\n", *blob.Name, size, lastMod)
+			count++
+		}
+	}
+
+	if count == 0 {
+		writeResult(w, id, map[string]interface{}{
+			"content": []map[string]interface{}{
+				{
+					"type": "text",
+					"text": "No notes found.",
+				},
+			},
+		})
+		return
+	}
+
+	header := fmt.Sprintf("=== Notes (%d files) ===\n\n", count)
+	writeResult(w, id, map[string]interface{}{
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": header + text.String(),
+			},
+		},
+	})
 }
 
 func writeResult(w http.ResponseWriter, id json.RawMessage, result interface{}) {

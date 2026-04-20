@@ -142,6 +142,32 @@ var hostMap = {
 // Generate a random API key for MCP server authentication
 var mcpApiKey = uniqueString(resourceGroup().id, 'mcp-api-key', keyVault.id)
 
+// ============================================================
+// Storage Account (for agent notes)
+// ============================================================
+
+resource notesStorage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'stisunotes${shortSuffix}'
+  location: location
+  kind: 'StorageV2'
+  sku: { name: 'Standard_LRS' }
+  tags: { project: 'isucon13' }
+  properties: {
+    allowBlobPublicAccess: false
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: notesStorage
+  name: 'default'
+}
+
+resource notesContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'notes'
+}
+
 module aca 'modules/aca.bicep' = {
   name: 'aca'
   params: {
@@ -152,6 +178,7 @@ module aca 'modules/aca.bicep' = {
     keyVaultName: keyVault.name
     hostMapJson: string(hostMap)
     mcpApiKey: mcpApiKey
+    storageAccountName: notesStorage.name
   }
 }
 
