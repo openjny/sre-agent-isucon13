@@ -1,0 +1,89 @@
+# prek (pre-commit compatible) hook configuration
+# Install: brew install prek && prek install
+# Run all: prek run --all-files
+repos:
+  # ── General checks ──────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  # ── Secret detection ────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+
+  # ── Go: format + lint + security ────────────────────────────
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: go fmt
+        entry: bash -c 'cd isucon-mcp-server && gofmt -l -w .'
+        language: system
+        files: ^isucon-mcp-server/.*\.go$
+        pass_filenames: false
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'cd isucon-mcp-server && golangci-lint run ./...'
+        language: system
+        files: ^isucon-mcp-server/.*\.go$
+        pass_filenames: false
+      - id: gosec
+        name: gosec
+        entry: bash -c 'cd isucon-mcp-server && gosec ./...'
+        language: system
+        files: ^isucon-mcp-server/.*\.go$
+        pass_filenames: false
+
+  # ── Python: lint + format ───────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^srectl/
+      - id: ruff-format
+        files: ^srectl/
+
+  # ── Python: security ───────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.0
+    hooks:
+      - id: bandit
+        args: [-r, -c, srectl/pyproject.toml]
+        files: ^srectl/
+        additional_dependencies: ["bandit[toml]"]
+
+  # ── Bash: lint ──────────────────────────────────────────────
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [-x, -e, SC1091, -e, SC2016]
+        files: ^scripts/
+        exclude: ^scripts/srectl$
+
+  # ── Bash: format ────────────────────────────────────────────
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.11.0-1
+    hooks:
+      - id: shfmt
+        files: ^scripts/
+        exclude: ^scripts/srectl$
+
+  # ── Bicep: lint ─────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: bicep-lint
+        name: bicep lint
+        entry: bash -c 'for f in "$@"; do az bicep lint --file "$f" || exit 1; done' --
+        language: system
+        files: \.bicep$
+        exclude: \.bicepparam$
