@@ -22,6 +22,9 @@ spec:
     6. Benchmark after each change to measure impact
     7. Record findings and track score progression
 
+    ## Waiting
+    - Use the `WaitInMilliSeconds` tool to pause when waiting for an asynchronous task to complete (e.g., benchmark results).
+
     ## Reporting
     - Use note_write to track each change, the rationale, and the impact on score (`notes.md`).
     - At the end, compile a final report summarizing all optimizations and their impacts (`report.md`).
