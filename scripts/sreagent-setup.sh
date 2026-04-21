@@ -60,7 +60,25 @@ echo "🔗 Creating MCP connector..."
 MCP_FQDN=$(azd env get-value ISUCON_MCP_FQDN 2>/dev/null || echo "")
 MCP_API_KEY=$(azd env get-value ISUCON_MCP_API_KEY 2>/dev/null || echo "")
 if [ -n "$MCP_FQDN" ] && [ -n "$MCP_API_KEY" ]; then
-	$SRECTL mcp add --name isucon-mcp --url "https://${MCP_FQDN}/mcp" --header "X-API-Key=${MCP_API_KEY}"
+	MCP_URL="https://${MCP_FQDN}/mcp"
+	echo "   Waiting for MCP server to be ready..."
+	for attempt in $(seq 1 30); do
+		PING_RESULT=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$MCP_URL" \
+			-H "Authorization: Bearer ${MCP_API_KEY}" \
+			-H "Content-Type: application/json" \
+			-d '{"jsonrpc":"2.0","method":"ping","id":1}' 2>/dev/null || echo "000")
+		if [ "$PING_RESULT" = "200" ]; then
+			echo "   MCP server ready (attempt $attempt)"
+			break
+		fi
+		if [ "$attempt" = "30" ]; then
+			echo "   ⚠️  MCP server not ready after 30 attempts, proceeding anyway"
+		else
+			echo "   MCP server not ready (HTTP $PING_RESULT), retrying... ($attempt/30)"
+			sleep 10
+		fi
+	done
+	$SRECTL mcp add --name isucon-mcp --url "$MCP_URL" --header "X-API-Key=${MCP_API_KEY}"
 else
 	echo "   ⚠️  ISUCON_MCP_FQDN or ISUCON_MCP_API_KEY not set"
 fi
