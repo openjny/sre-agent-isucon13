@@ -18,3 +18,6 @@ hooks:
   postprovision:
     shell: sh
     run: scripts/post-provision.sh
+  predown:
+    shell: sh
+    run: azd env set TRIGGER_ID '' && azd env set THREAD_ID ''

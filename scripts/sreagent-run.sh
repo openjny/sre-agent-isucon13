@@ -39,6 +39,19 @@ done
 TRIGGER_ID=$(azd env get-value TRIGGER_ID 2>/dev/null || echo "")
 THREAD_ID=$(azd env get-value THREAD_ID 2>/dev/null || echo "")
 
+# ── Validate stored IDs ──────────────────────────────────────────────────────
+# After azd down + azd up, old IDs become stale. Detect and clear them.
+if [ -n "$THREAD_ID" ]; then
+	HTTP_CODE=$($SRECTL -o json thread messages "$THREAD_ID" --top 1 2>&1 | grep -o 'HTTP [0-9]*' | grep -o '[0-9]*' || echo "200")
+	if [ "$HTTP_CODE" = "404" ]; then
+		echo "⚠️  Stored THREAD_ID is stale (404). Clearing..."
+		THREAD_ID=""
+		TRIGGER_ID=""
+		azd env set THREAD_ID "" 2>/dev/null
+		azd env set TRIGGER_ID "" 2>/dev/null
+	fi
+fi
+
 # ── Watch-only mode ──────────────────────────────────────────────────────────
 if $ENABLE_WATCH && [ -n "$THREAD_ID" ]; then
 	echo "Watching thread $THREAD_ID (interval: ${INTERVAL}s)"
