@@ -107,11 +107,17 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
         managedDisk: {
           storageAccountType: 'Premium_LRS'
         }
+        deleteOption: 'Delete'
       }
     }
     networkProfile: {
       networkInterfaces: [
-        { id: nic.id }
+        {
+          id: nic.id
+          properties: {
+            deleteOption: 'Delete'
+          }
+        }
       ]
     }
   }
