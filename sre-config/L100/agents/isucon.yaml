@@ -49,17 +49,10 @@ spec:
   enableSkills: true
   hooks:
     Stop:
-    - type: prompt
-      prompt: |
-        Check if the ISUCON contest time limit has been reached.
-        If the contest is still ongoing, the agent MUST continue working on optimizations.
-
-        $ARGUMENTS
-
-        Respond with:
-        - {"ok": true} if the contest time limit has been reached or the agent has completed all planned work
-        - {"ok": false, "reason": "Contest is still ongoing. Continue optimizing — review recent benchmark results and apply the next improvement."} if there is still time remaining
-      model: ReasoningFast
+    - type: command
       timeout: 30
       failMode: block
-      maxRejections: 25
+      script: |
+        #!/usr/bin/env python3
+        import json
+        print(json.dumps({"decision": "block", "reason": "Contest is still ongoing. Continue optimizing!"}))

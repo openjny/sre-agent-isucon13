@@ -52,3 +52,12 @@ spec:
   - go-db-tuning
   - mysql-buffer-tuning
   - nginx-tuning
+  hooks:
+    Stop:
+    - type: command
+      timeout: 30
+      failMode: block
+      script: |
+        #!/usr/bin/env python3
+        import json
+        print(json.dumps({"decision": "block", "reason": "Contest is still ongoing. Continue optimizing!"}))
