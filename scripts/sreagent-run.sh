@@ -41,14 +41,22 @@ THREAD_ID=$(azd env get-value THREAD_ID 2>/dev/null || echo "")
 
 # ── Validate stored IDs ──────────────────────────────────────────────────────
 # After azd down + azd up, old IDs become stale. Detect and clear them.
+if [ -n "$TRIGGER_ID" ]; then
+	# Check if trigger still exists by listing triggers and looking for TRIGGER_ID
+	if ! $SRECTL trigger list 2>/dev/null | grep -q "$TRIGGER_ID"; then
+		echo "⚠️  Stored TRIGGER_ID is stale (not found). Clearing..."
+		TRIGGER_ID=""
+		THREAD_ID=""
+		azd env set TRIGGER_ID "" 2>/dev/null
+		azd env set THREAD_ID "" 2>/dev/null
+	fi
+fi
 if [ -n "$THREAD_ID" ]; then
 	HTTP_CODE=$($SRECTL -o json thread messages "$THREAD_ID" --top 1 2>&1 | grep -o 'HTTP [0-9]*' | grep -o '[0-9]*' || echo "200")
 	if [ "$HTTP_CODE" = "404" ]; then
 		echo "⚠️  Stored THREAD_ID is stale (404). Clearing..."
 		THREAD_ID=""
-		TRIGGER_ID=""
 		azd env set THREAD_ID "" 2>/dev/null
-		azd env set TRIGGER_ID "" 2>/dev/null
 	fi
 fi
 
